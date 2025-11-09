@@ -8,7 +8,13 @@ on:
   push:
     branches:
       - develop
-  workflow_dispatch:
+    paths-ignore:
+      - 'test_data/**'           # test_data 폴더 전체 무시
+      - 'docs/**'                # 예: 문서 폴더
+      - '*.md'                   # 모든 마크다운 파일
+      - '.gitignore'
+      - '.funcignore'
+      - '.commit_template'
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
@@ -88,4 +94,5 @@ jobs:
           remote-build: true  # Azure에서 추가 빌드 (Oryx 활성화)
           respect-funcignore: true  # .funcignore 존중
             
+
 
