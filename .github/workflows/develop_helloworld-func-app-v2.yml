@@ -46,30 +46,36 @@ jobs:
 
       - name: Zip artifact for deployment
         run: |
-          # 디버깅: 현재 디렉토리 확인
+          # 현재 디렉토리 확인
+          echo "Current directory:"
           pwd
           ls -la
       
           # .funcignore 존재 확인
           if [ ! -f .funcignore ]; then
-            echo "ERROR: .funcignore not found in $(pwd)"
+            echo "ERROR: .funcignore not found!"
             exit 1
           fi
       
-          # ZIP 생성 (명시적 포함)
+          # ZIP 생성: 프로젝트 루트 파일들이 ZIP 루트에 오도록
           zip -r release.zip \
             .funcignore \
             function_app.py \
-            requirements.txt \
             host.json \
+            requirements.txt \
             configs/ \
             prompts/ \
             .python_packages/ \
-            -x "venv/*" "*.pyc" "__pycache__/*" ".git/*" ".github/*"
+            -x "venv/*" \
+               "__pycache__/*" \
+               "*.pyc" \
+               ".git/*" \
+               ".github/*" \
+               "*.zip"
       
-          # 확인
-          echo "=== ZIP에 .funcignore 포함되었는지 확인 ==="
-          unzip -l release.zip | grep funcignore || echo ".funcignore not in ZIP!"
+          # ZIP 구조 확인 (중요!)
+          echo "=== ZIP CONTENTS (should be flat) ==="
+          unzip -l release.zip
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -93,8 +99,10 @@ jobs:
   
       - name: Unzip artifact for deployment
         run: |
-          unzip release.zip
+          unzip release.zip -d .
           rm release.zip
+          echo "After unzip:"
+          ls -la
   
       - name: Login to Azure
         uses: azure/login@v2
@@ -105,14 +113,13 @@ jobs:
   
       - name: 'Deploy to Azure Functions'
         uses: Azure/functions-action@v1
-        id: deploy-to-function
         with:
           app-name: 'helloworld-func-app-v2'
-          slot-name: 'Production'
-          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          remote-build: true  # Azure에서 추가 빌드 (Oryx 활성화)
-          respect-funcignore: true  # .funcignore 존중
+          package: .                    # 현재 폴더 (unzip된 곳)
+          respect-funcignore: true
+          remote-build: true
             
+
 
 
 
