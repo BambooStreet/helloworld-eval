@@ -60,8 +60,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    environment:
-      name: 'production'  # OIDC 사용 시 추가 (선택)
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
@@ -90,3 +88,4 @@ jobs:
           remote-build: true  # Azure에서 추가 빌드 (Oryx 활성화)
           respect-funcignore: true  # .funcignore 존중
             
+
