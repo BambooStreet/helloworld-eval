@@ -35,22 +35,29 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+          
       - name: Create and start virtual environment
         run: |
           python -m venv venv
-          source venv/bin/activate  # venv 활성화
+          source venv/bin/activate
 
-      - name: Install dependencies  # 여기가 핵심: -t ./ 로 루트에 설치
+      - name: Install dependencies
         run: |
-          source venv/bin/activate  # 재활성화 (중요!)
+          source venv/bin/activate
+          pip install --upgrade pip
           pip install -r requirements.txt -t .  # 루트에 패키지 복사 (no venv)
+          # .python_packages 구조 생성 (Azure Functions Python v2 추천)
+          mkdir -p .python_packages/lib/site-packages
+          mv -f *.egg-info .python_packages/lib/site-packages/ 2>/dev/null || true
+          mv -f *.dist-info .python_packages/lib/site-packages/ 2>/dev/null || true
+          # 불필요 파일 정리
+          find . -name "*.pyc" -delete
+          find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
       - name: Zip artifact for deployment
         run: |
-          # 디버깅: 파일 목록
           echo "Files before zip:"
           ls -la
-          
           # .funcignore 확인
           if [ ! -f .funcignore ]; then
             echo "ERROR: .funcignore missing!"
@@ -58,26 +65,17 @@ jobs:
           fi
           echo ".funcignore contents:"
           cat .funcignore
-
-          # ZIP 생성: 루트 파일들 최상위로 (폴더 구조 피함)
-          zip -r release.zip \
-            .funcignore \
-            function_app.py \
-            host.json \
-            requirements.txt \
-            configs/ \
-            prompts/ \
-            .python_packages/ || true  # 에러 무시 (없는 폴더 스킵)
-          
-          # 추가 파일들 (위에서 누락된 경우)
-          find . -maxdepth 1 -type f -not -path "./venv/*" -not -path "./release.zip" -not -path "./.git/*" -exec zip -r release.zip {} \;
-
-          # 제외 패턴 적용 (funcignore 시뮬)
-          # ZIP에서 test_data 등 제거 (선택적, funcignore가 동작하면 불필요)
-          zip -d release.zip "test_data/*" 2>/dev/null || true
-
-          echo "=== ZIP STRUCTURE (must be flat root) ==="
-          unzip -l release.zip | head -20  # 로그에 출력
+          # ZIP: 루트 구조 (function_app.py 최상위)
+          zip -r release.zip . \
+            -x "venv/*" \
+               ".git/*" \
+               ".github/*" \
+               "__pycache__/*" \
+               "*.pyc" \
+               "*.zip" \
+               "release.zip"
+          echo "=== ZIP STRUCTURE (flat root required) ==="
+          unzip -l release.zip | head -20
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -117,10 +115,12 @@ jobs:
         with:
           app-name: 'helloworld-func-app-v2'
           package: .                    # 현재 폴더 (unzip된 곳)
-          clean: true  # 이전 파일 삭제 (충돌 방지)
           respect-funcignore: true
-          remote-build: true
+          remote-build: false
+          scm-do-build-during-deployment: false
+          enable-oryx-build: false
             
+
 
 
 
