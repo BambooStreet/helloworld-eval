@@ -2,16 +2,54 @@ import azure.functions as func
 import logging
 import os
 import json
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from pymongo import MongoClient
-from query_model import ChatModel
-from prompts import prompts
-
 
 app = func.FunctionApp()
 
-load_dotenv(verbose=True)
+# 전역 변수 선언
+chat_service = None
+
+# 테스트 엔드포인트 (항상 동작 보장)
+@app.route(route="get_test", auth_level=func.AuthLevel.ANONYMOUS, methods=["GET"])
+def get_echo_call(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    테스트용 엔드포인트입니다.
+
+    Parameters:
+        req (func.HttpRequest): HTTP 요청 객체
+        쿼리 파라미터 'param'을 통해 값을 전달받음
+
+    Returns:
+        func.HttpResponse: 입력받은 파라미터를 그대로 반환
+        
+    사용법:
+        GET /api/get_test?param=hello
+    """
+
+    logging.info("Test endpoint triggered")
+    
+    try:
+        param = req.params.get("param")  # 쿼리 파라미터로 받기
+        logging.info(f"Received param: {param}")
+        
+        if not param:
+            return func.HttpResponse(
+                json.dumps({"error": "No param provided. Use ?param=value"}, ensure_ascii=False),
+                mimetype="application/json",
+                status_code=400
+            )
+        
+        return func.HttpResponse(
+            json.dumps({"param": param}, ensure_ascii=False),
+            mimetype="application/json",
+            status_code=200
+        )
+    except Exception as e:
+        logging.error(f"Error in test endpoint: {str(e)}")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}, ensure_ascii=False),
+            mimetype="application/json",
+            status_code=500
+        )
 
 
 class ChatService:
@@ -35,6 +73,8 @@ class ChatService:
             self.db_name = self.config['path']['db_name']
             self.collection_name = self.config['path']['collection_name']
         
+        # Lazy import
+        from query_model import ChatModel
         self.model = ChatModel(self.config)
 
         # MongoDB 클러스터 URI 환경변수 설정
@@ -44,6 +84,7 @@ class ChatService:
         logging.info("model and environment variables initialized")
 
         try:
+            from pymongo import MongoClient
             self.client = MongoClient(os.environ["MONGODB_URI"], ssl=True)
             logging.info(f"MongoDB INFO : {self.client.server_info()}")
 
@@ -52,17 +93,12 @@ class ChatService:
         except Exception as e:
             logging.error(f"Error loading database: {str(e)}")
             raise
-    # Translate & MongoQuery -> "translated", "mongo_query" 로 묶인 result가 옴
 
-    # 키워드 기반 검색 함수
-    def get_query_model_response_with_docs(self,query_text, mongo_query):
+    def get_query_model_response_with_docs(self, conversation_history, query_text, mongo_query=None):
         """
         키워드 기반 하이브리드 검색 모델로부터 답변을 생성하고 검색된 문서들의 인덱스를 반환
         """
         try:
-            # 빈 대화 히스토리로 시작
-            conversation_history = []
-            
             # 키워드 기반 모델 답변 생성
             response = self.model.generate_ai_response(
                 conversation_history, 
@@ -85,11 +121,9 @@ class ChatService:
                 "retrieved_docs": []
             }
 
-# 전역 변수 선언
-chat_service = None
 
 # 사용자 요청 수신
-@app.route(route="question", auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="question", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"])
 def question(req: func.HttpRequest) -> func.HttpResponse:
     """
     이 함수는 HTTP POST 요청을 통해 사용자의 대화 내용을 받고,
@@ -122,10 +156,14 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
 
     global chat_service
 
-    if not chat_service:
-        chat_service = ChatService()
-
     try:
+        # Lazy import
+        from dotenv import load_dotenv
+        load_dotenv(verbose=True)
+
+        if not chat_service:
+            chat_service = ChatService()
+
         # 요청 본문에서 JSON 데이터를 가져오고, Conversation 필드를 추출
         req_body = req.get_json()
         conversation = req_body.get("Conversation", [])
@@ -148,7 +186,7 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
         if user_query is None:
             return func.HttpResponse("No user utterance found", status_code=400)
 
-        # 응답 생성
+        # 응답 생성 (수정된 시그니처)
         response = chat_service.get_query_model_response_with_docs(conversation, user_query)
 
         # 응답에서 references 제외하고 answer만 반환
@@ -159,12 +197,12 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     except Exception as e:
-        logging.error(f"Error processing question: {str(e)}")
+        logging.exception("Question handler failed on import/exec")
         return func.HttpResponse(f"An error occurred: {str(e)}", status_code=500)
 
 
 # 이력서 생성
-@app.route(route="cv_generation", auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="cv_generation", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"])
 def cv_generation(req: func.HttpRequest) -> func.HttpResponse:
     """
     이력서 생성 요청을 처리하는 엔드포인트입니다.
@@ -204,10 +242,17 @@ def cv_generation(req: func.HttpRequest) -> func.HttpResponse:
 
     logging.info("CV Generation function triggered.")
 
-    # OpenAI API 키 환경변수 설정
-    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-
     try:
+        # Lazy import
+        from dotenv import load_dotenv
+        from langchain_openai import ChatOpenAI
+        from prompts import prompts
+
+        load_dotenv(verbose=True)
+
+        # OpenAI API 키 환경변수 설정
+        os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+
         # 요청 본문에서 JSON 데이터 가져오기
         req_body = req.get_json()
 
@@ -284,46 +329,5 @@ def cv_generation(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     except Exception as e:
-        logging.error(f"Error generating CV: {str(e)}")
+        logging.exception("CV generation handler failed on import/exec")
         return func.HttpResponse(f"An error occurred: {str(e)}", status_code=500)
-
-
-# 테스트 엔드포인트
-@app.route(route="get_test/{param}", auth_level=func.AuthLevel.ANONYMOUS, methods=["GET"])
-def get_echo_call(req: func.HttpRequest) -> func.HttpResponse:
-    """
-    테스트용 엔드포인트입니다.
-
-    Parameters:
-        req (func.HttpRequest): HTTP 요청 객체
-        param: URL 경로에서 추출할 파라미터
-
-    Returns:
-        func.HttpResponse: 입력받은 파라미터를 그대로 반환
-    """
-
-    logging.info("Test endpoint triggered")
-    
-    try:
-        param = req.route_params.get("param")
-        logging.info(f"Received param: {param}")
-        
-        if not param:
-            return func.HttpResponse(
-                json.dumps({"error": "No param provided"}, ensure_ascii=False),
-                mimetype="application/json",
-                status_code=400
-            )
-        
-        return func.HttpResponse(
-            json.dumps({"param": param}, ensure_ascii=False),
-            mimetype="application/json",
-            status_code=200
-        )
-    except Exception as e:
-        logging.error(f"Error in test endpoint: {str(e)}")
-        return func.HttpResponse(
-            json.dumps({"error": str(e)}, ensure_ascii=False),
-            mimetype="application/json",
-            status_code=500
-        )
