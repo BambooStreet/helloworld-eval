@@ -44,13 +44,32 @@ jobs:
           source venv/bin/activate  # 재활성화 (중요!)
           pip install -r requirements.txt -t .  # 루트에 패키지 복사 (no venv)
 
-      - name: Zip artifact for deployment  # .python_packages 구조로 재구성
+      - name: Zip artifact for deployment
         run: |
-          mkdir -p .python_packages/lib/site-packages
-          mv *.egg-info .python_packages/lib/site-packages/ 2>/dev/null || true
-          mv *.dist-info .python_packages/lib/site-packages/ 2>/dev/null || true
-          find . -name "*.pyc" -delete  # 불필요 파일 정리
-          zip release.zip ./* -r -x "venv/*" "__pycache__/*" "*.pyc"
+          # 디버깅: 현재 디렉토리 확인
+          pwd
+          ls -la
+      
+          # .funcignore 존재 확인
+          if [ ! -f .funcignore ]; then
+            echo "ERROR: .funcignore not found in $(pwd)"
+            exit 1
+          fi
+      
+          # ZIP 생성 (명시적 포함)
+          zip -r release.zip \
+            .funcignore \
+            function_app.py \
+            requirements.txt \
+            host.json \
+            configs/ \
+            prompts/ \
+            .python_packages/ \
+            -x "venv/*" "*.pyc" "__pycache__/*" ".git/*" ".github/*"
+      
+          # 확인
+          echo "=== ZIP에 .funcignore 포함되었는지 확인 ==="
+          unzip -l release.zip | grep funcignore || echo ".funcignore not in ZIP!"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -94,5 +113,6 @@ jobs:
           remote-build: true  # Azure에서 추가 빌드 (Oryx 활성화)
           respect-funcignore: true  # .funcignore 존중
             
+
 
 
