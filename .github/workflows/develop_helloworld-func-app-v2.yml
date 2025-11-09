@@ -112,13 +112,14 @@ jobs:
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_38315503FB544283B25778BC0432E22A }}
   
       - name: 'Deploy to Azure Functions'
-        uses: Azure/functions-action@v1
+        uses: Azure/functions-action@v2
         with:
           app-name: 'helloworld-func-app-v2'
           package: .                    # 현재 폴더 (unzip된 곳)
           respect-funcignore: true
           remote-build: true
             
+
 
 
 
