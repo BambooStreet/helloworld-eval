@@ -289,7 +289,7 @@ def cv_generation(req: func.HttpRequest) -> func.HttpResponse:
 
 
 # 테스트 엔드포인트
-@app.route(route="get_test/{param}", auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="get_test/{param}", auth_level=func.AuthLevel.ANONYMOUS, methods=["GET"])
 def get_echo_call(req: func.HttpRequest) -> func.HttpResponse:
     """
     테스트용 엔드포인트입니다.
@@ -302,5 +302,28 @@ def get_echo_call(req: func.HttpRequest) -> func.HttpResponse:
         func.HttpResponse: 입력받은 파라미터를 그대로 반환
     """
 
-    param = req.route_params.get("param")
-    return func.HttpResponse(json.dumps({"param": param}), mimetype="application/json")
+    logging.info("Test endpoint triggered")
+    
+    try:
+        param = req.route_params.get("param")
+        logging.info(f"Received param: {param}")
+        
+        if not param:
+            return func.HttpResponse(
+                json.dumps({"error": "No param provided"}, ensure_ascii=False),
+                mimetype="application/json",
+                status_code=400
+            )
+        
+        return func.HttpResponse(
+            json.dumps({"param": param}, ensure_ascii=False),
+            mimetype="application/json",
+            status_code=200
+        )
+    except Exception as e:
+        logging.error(f"Error in test endpoint: {str(e)}")
+        return func.HttpResponse(
+            json.dumps({"error": str(e)}, ensure_ascii=False),
+            mimetype="application/json",
+            status_code=500
+        )
