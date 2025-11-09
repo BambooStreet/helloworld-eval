@@ -46,35 +46,27 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt -t .  # 루트에 패키지 복사 (no venv)
-          # .python_packages 구조 생성 (Azure Functions Python v2 추천)
-          mkdir -p .python_packages/lib/site-packages
-          mv -f *.egg-info .python_packages/lib/site-packages/ 2>/dev/null || true
-          mv -f *.dist-info .python_packages/lib/site-packages/ 2>/dev/null || true
-          # 불필요 파일 정리
-          find . -name "*.pyc" -delete
-          find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
       - name: Zip artifact for deployment
         run: |
-          echo "Files before zip:"
-          ls -la
-          # .funcignore 확인
+          # .funcignore 확인 및 포함
           if [ ! -f .funcignore ]; then
-            echo "ERROR: .funcignore missing!"
+            echo "ERROR: .funcignore not found!"
             exit 1
           fi
           echo ".funcignore contents:"
           cat .funcignore
-          # ZIP: 루트 구조 (function_app.py 최상위)
+
+          # ZIP 생성: 모든 파일 루트에
           zip -r release.zip . \
             -x "venv/*" \
                ".git/*" \
                ".github/*" \
                "__pycache__/*" \
                "*.pyc" \
-               "*.zip" \
-               "release.zip"
-          echo "=== ZIP STRUCTURE (flat root required) ==="
+               "*.zip"
+
+          echo "=== ZIP STRUCTURE (MUST BE FLAT) ==="
           unzip -l release.zip | head -20
 
       - name: Upload artifact
@@ -120,6 +112,7 @@ jobs:
           scm-do-build-during-deployment: false
           enable-oryx-build: false
             
+
 
 
 
