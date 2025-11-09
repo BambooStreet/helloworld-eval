@@ -15,6 +15,7 @@ on:
       - '.gitignore'
       - '.funcignore'
       - '.commit_template'
+  workflow_dispatch:
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
@@ -46,18 +47,19 @@ jobs:
 
       - name: Zip artifact for deployment
         run: |
-          # 현재 디렉토리 확인
-          echo "Current directory:"
-          pwd
+          # 디버깅: 파일 목록
+          echo "Files before zip:"
           ls -la
-      
-          # .funcignore 존재 확인
+          
+          # .funcignore 확인
           if [ ! -f .funcignore ]; then
-            echo "ERROR: .funcignore not found!"
+            echo "ERROR: .funcignore missing!"
             exit 1
           fi
-      
-          # ZIP 생성: 프로젝트 루트 파일들이 ZIP 루트에 오도록
+          echo ".funcignore contents:"
+          cat .funcignore
+
+          # ZIP 생성: 루트 파일들 최상위로 (폴더 구조 피함)
           zip -r release.zip \
             .funcignore \
             function_app.py \
@@ -65,24 +67,23 @@ jobs:
             requirements.txt \
             configs/ \
             prompts/ \
-            .python_packages/ \
-            -x "venv/*" \
-               "__pycache__/*" \
-               "*.pyc" \
-               ".git/*" \
-               ".github/*" \
-               "*.zip"
-      
-          # ZIP 구조 확인 (중요!)
-          echo "=== ZIP CONTENTS (should be flat) ==="
-          unzip -l release.zip
+            .python_packages/ || true  # 에러 무시 (없는 폴더 스킵)
+          
+          # 추가 파일들 (위에서 누락된 경우)
+          find . -maxdepth 1 -type f -not -path "./venv/*" -not -path "./release.zip" -not -path "./.git/*" -exec zip -r release.zip {} \;
 
-      - name: Upload artifact for deployment job
+          # 제외 패턴 적용 (funcignore 시뮬)
+          # ZIP에서 test_data 등 제거 (선택적, funcignore가 동작하면 불필요)
+          zip -d release.zip "test_data/*" 2>/dev/null || true
+
+          echo "=== ZIP STRUCTURE (must be flat root) ==="
+          unzip -l release.zip | head -20  # 로그에 출력
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            release.zip
+          path: release.zip
           retention-days: 1
 
   deploy:
@@ -112,13 +113,15 @@ jobs:
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_38315503FB544283B25778BC0432E22A }}
   
       - name: 'Deploy to Azure Functions'
-        uses: Azure/functions-action@v2
+        uses: Azure/functions-action@v1
         with:
           app-name: 'helloworld-func-app-v2'
           package: .                    # 현재 폴더 (unzip된 곳)
+          clean: true  # 이전 파일 삭제 (충돌 방지)
           respect-funcignore: true
           remote-build: true
             
+
 
 
 
