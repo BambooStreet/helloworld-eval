@@ -77,15 +77,18 @@ class ChatService:
         from query_model import ChatModel
         self.model = ChatModel(self.config)
 
-        # MongoDB 클러스터 URI 환경변수 설정
-        os.environ["MONGODB_URI"] = os.getenv("MONGODB_URI")
-        os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+        # Azure Application Settings에서 환경변수 직접 가져오기
+        mongodb_uri = os.getenv("MONGODB_URI")
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        
+        if not mongodb_uri or not openai_api_key:
+            raise ValueError("Required environment variables (MONGODB_URI, OPENAI_API_KEY) are not set")
 
         logging.info("model and environment variables initialized")
 
         try:
             from pymongo import MongoClient
-            self.client = MongoClient(os.environ["MONGODB_URI"], ssl=True)
+            self.client = MongoClient(mongodb_uri, ssl=True)
             logging.info(f"MongoDB INFO : {self.client.server_info()}")
 
             self.collection = self.client[self.db_name][self.collection_name]
@@ -157,10 +160,6 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
     global chat_service
 
     try:
-        # Lazy import
-        from dotenv import load_dotenv
-        load_dotenv(verbose=True)
-
         if not chat_service:
             chat_service = ChatService()
 
@@ -243,15 +242,13 @@ def cv_generation(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("CV Generation function triggered.")
 
     try:
-        # Lazy import
-        from dotenv import load_dotenv
         from langchain_openai import ChatOpenAI
         from prompts import prompts
 
-        load_dotenv(verbose=True)
-
-        # OpenAI API 키 환경변수 설정
-        os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+        # Azure Application Settings에서 환경변수 직접 가져오기
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
 
         # 요청 본문에서 JSON 데이터 가져오기
         req_body = req.get_json()

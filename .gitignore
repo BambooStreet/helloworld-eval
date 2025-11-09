@@ -17,6 +17,7 @@ data/data_pipeline/crawled_data/
 local.settings.json
 
 ### dotenv ###
+# Note: Azure Functions uses Application Settings instead of .env files in production
 .env
 
 ### Linux ###
