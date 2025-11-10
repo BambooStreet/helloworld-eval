@@ -10,7 +10,7 @@ chat_service = None
 
 # 테스트 엔드포인트 (항상 동작 보장)
 @app.route(route="get_test", auth_level=func.AuthLevel.ANONYMOUS, methods=["GET"])
-def get_echo_call(req: func.HttpRequest) -> func.HttpResponse:
+def get_test(req: func.HttpRequest) -> func.HttpResponse:
     """
     테스트용 엔드포인트입니다.
 
