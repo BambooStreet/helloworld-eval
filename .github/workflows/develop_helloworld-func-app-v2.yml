@@ -54,48 +54,50 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_E8839995F2FC441B9A929EE4F5C5BCEB }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_38315503FB544283B25778BC0432E22A }}
 
-      - name: Upload ZIP & Set WEBSITE_RUN_FROM_PACKAGE
+      - name: Upload ZIP & Set WEBSITE_RUN_FROM_PACKAGE (via connection string)
         uses: azure/CLI@v2
         with:
           inlineScript: |
             set -e
       
-            if [ -z "${{ secrets.STORAGE_ACCOUNT_KEY }}" ]; then
-              echo "❌ STORAGE_ACCOUNT_KEY is empty. Add repo secret first."
+            if [ -z "${{ secrets.STORAGE_CONNECTION_STRING }}" ]; then
+              echo "❌ STORAGE_CONNECTION_STRING is empty. Add repo secret first."
               exit 1
             fi
       
             ZIP_NAME="release-$(date +%Y%m%d%H%M%S).zip"
             mv release.zip "$ZIP_NAME"
       
+            # 컨테이너 생성 (있으면 통과)
             az storage container create \
               --name ${{ env.STORAGE_CONTAINER }} \
-              --account-name ${{ env.STORAGE_ACCOUNT }} \
-              --account-key "${{ secrets.STORAGE_ACCOUNT_KEY }}" || true
+              --connection-string "${{ secrets.STORAGE_CONNECTION_STRING }}" || true
       
+            # 업로드
             az storage blob upload \
-              --account-name ${{ env.STORAGE_ACCOUNT }} \
-              --account-key "${{ secrets.STORAGE_ACCOUNT_KEY }}" \
               --container-name ${{ env.STORAGE_CONTAINER }} \
               --name "$ZIP_NAME" \
               --file "$ZIP_NAME" \
+              --connection-string "${{ secrets.STORAGE_CONNECTION_STRING }}" \
               --overwrite
       
+            # SAS 생성 (읽기 권한, 30일)
             EXPIRY=$(date -u -d "30 days" '+%Y-%m-%dT%H:%MZ')
             SAS_URL=$(az storage blob generate-sas \
-              --account-name ${{ env.STORAGE_ACCOUNT }} \
-              --account-key "${{ secrets.STORAGE_ACCOUNT_KEY }}" \
               --container-name ${{ env.STORAGE_CONTAINER }} \
               --name "$ZIP_NAME" \
               --permissions r \
               --expiry "$EXPIRY" \
-              --full-uri | tr -d '"')
+              --full-uri \
+              --connection-string "${{ secrets.STORAGE_CONNECTION_STRING }}" \
+              | tr -d '"')
       
+            # Function App에 설정
             az functionapp config appsettings set \
               --name ${{ env.FUNCTION_APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --settings WEBSITE_RUN_FROM_PACKAGE="$SAS_URL"
       
             az functionapp restart --name ${{ env.FUNCTION_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }}
-      
+
 
