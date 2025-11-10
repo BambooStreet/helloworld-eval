@@ -2,20 +2,23 @@ name: Build and deploy Python project to Azure Function App - helloworld-func-ap
 
 on:
   push:
-    branches:
-      - develop
+    branches: [ develop ]
     paths-ignore:
-      - 'test_data/**'  # test_data 폴더 전체 무시
-      - 'docs/**'       # 예: 문서 폴더
-      - '*.md'          # 모든 마크다운 파일
+      - 'test_data/**'
+      - 'docs/**'
+      - '*.md'
       - '.gitignore'
       - '.funcignore'
       - '.commit_template'
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.'  # 프로젝트 루트 경로
-  PYTHON_VERSION: '3.11'               # 사용할 Python 버전
+  PYTHON_VERSION: '3.11'
+  FUNCTION_APP_NAME: 'helloworld-func-app-v2'
+  RESOURCE_GROUP: 'helloworld_resource_group'
+  STORAGE_ACCOUNT: 'helloworld844b'        # ← 네가 보여준 Storage Account
+  STORAGE_CONTAINER: 'function-releases'   # 없으면 자동 생성
+  SAS_EXPIRY_DAYS: '30'                    # SAS 만료일(일 단위)
 
 jobs:
   build:
@@ -23,10 +26,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python ${{ env.PYTHON_VERSION }}
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -34,22 +37,17 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v3
 
-      - name: Install dependencies (using uv)
+      - name: Install dependencies (uv → .python_packages)
         run: |
           mkdir -p .python_packages/lib/python${{ env.PYTHON_VERSION }}/site-packages
-          uv pip install --system --no-cache -r requirements.txt --target .python_packages/lib/python${{ env.PYTHON_VERSION }}/site-packages
+          uv pip install --system --no-cache -r requirements.txt \
+            --target .python_packages/lib/python${{ env.PYTHON_VERSION }}/site-packages
 
       - name: Zip artifact for deployment
         run: |
-          echo "Zipping source code and dependencies..."
+          echo "Zipping source and dependencies..."
           zip -r release.zip . \
-            -x ".git/*" \
-            ".github/*" \
-            "__pycache__/*" \
-            "*.pyc" \
-            "*.zip" \
-            "venv/*"
-          # 설치된 패키지 추가
+            -x ".git/*" ".github/*" "__pycache__/*" "*.pyc" "*.zip" "venv/*"
           zip -r release.zip .python_packages
 
       - name: Upload artifact
@@ -71,18 +69,64 @@ jobs:
         with:
           name: python-app
 
-      - name: Azure login
+      - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B51AABE81AB54614A688140E5CD15A21 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_E8839995F2FC441B9A929EE4F5C5BCEB }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_38315503FB544283B25778BC0432E22A }}
 
-      - name: Deploy to Azure Functions
-        uses: Azure/functions-action@v1
+      - name: Deploy via WEBSITE_RUN_FROM_PACKAGE (Blob + SAS)
+        uses: azure/CLI@v2
         with:
-          app-name: 'helloworld-func-app-v2'
-          package: release.zip
-          scm-do-build-during-deployment: false  # Flex에서는 사용 안 됨
-          enable-oryx-build: false              # Flex에서는 사용 안 됨
-          remote-build: false                   # 명시적으로 설정 (기본값)
+          inlineScript: |
+            set -e
+
+            # 1) 컨테이너 준비
+            az storage container create \
+              --name ${{ env.STORAGE_CONTAINER }} \
+              --account-name ${{ env.STORAGE_ACCOUNT }} \
+              --auth-mode login || true
+
+            # 2) ZIP 이름 고유화 & 업로드
+            ZIP_NAME="release-$(date +%Y%m%d%H%M%S).zip"
+            mv release.zip "$ZIP_NAME"
+
+            az storage blob upload \
+              --account-name ${{ env.STORAGE_ACCOUNT }} \
+              --container-name ${{ env.STORAGE_CONTAINER }} \
+              --name "$ZIP_NAME" \
+              --file "$ZIP_NAME" \
+              --auth-mode login \
+              --overwrite
+
+            # 3) SAS URL 생성
+            EXPIRY=$(date -u -d "${{ env.SAS_EXPIRY_DAYS }} days" '+%Y-%m-%dT%H:%MZ')
+            SAS_URL=$(az storage blob generate-sas \
+              --account-name ${{ env.STORAGE_ACCOUNT }} \
+              --container-name ${{ env.STORAGE_CONTAINER }} \
+              --name "$ZIP_NAME" \
+              --permissions r \
+              --expiry "$EXPIRY" \
+              --auth-mode login --full-uri | tr -d '"')
+
+            echo "SAS_URL generated: $SAS_URL"
+
+            # 4) 앱 설정에 WEBSITE_RUN_FROM_PACKAGE 적용
+            az functionapp config appsettings set \
+              --name ${{ env.FUNCTION_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --settings WEBSITE_RUN_FROM_PACKAGE="$SAS_URL" \
+                          SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+                          ENABLE_ORYX_BUILD=false
+
+            # 5) 재시작 + 트리거 동기화
+            az functionapp restart \
+              --name ${{ env.FUNCTION_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }}
+
+            az functionapp sync-functions \
+              --name ${{ env.FUNCTION_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }}
+
+            echo "Deployment completed."
