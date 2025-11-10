@@ -72,3 +72,6 @@ jobs:
         with:
           app-name: 'helloworld-func-app-v2'
           package: release.zip
+          remote-build: true
+          scm-do-build-during-deployment: true
+
