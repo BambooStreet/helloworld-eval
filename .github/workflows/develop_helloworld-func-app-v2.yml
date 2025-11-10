@@ -5,6 +5,10 @@ on:
     branches: [develop]
   workflow_dispatch:
 
+permissions:           # ← 최상단(전체 워크플로 기본 권한)
+  contents: read
+  id-token: write      # ← OIDC 토큰 발급 허용
+
 env:
   FUNCTION_APP_NAME: helloworld-func-app-v2
   RESOURCE_GROUP: helloworld_resource_group
@@ -35,6 +39,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -87,3 +94,4 @@ jobs:
             az functionapp restart \
               --name ${{ env.FUNCTION_APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }}
+
