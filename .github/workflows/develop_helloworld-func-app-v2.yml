@@ -1,92 +1,103 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-# More info on Python, GitHub Actions, and Azure Functions: https://aka.ms/python-webapps-actions
-
-name: Build and deploy Python project to Azure Function App - helloworld-func-app-v2
+name: Deploy to Azure Function (Flex)
 
 on:
   push:
-    branches:
-      - develop
+    branches: [develop]
   workflow_dispatch:
 
+permissions:           # ← 최상단(전체 워크플로 기본 권한)
+  contents: read
+  id-token: write      # ← OIDC 토큰 발급 허용
+
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
-  PYTHON_VERSION: '3.11' # set this to the python version to use (supports 3.6, 3.7, 3.8)
+  FUNCTION_APP_NAME: helloworld-func-app-v2
+  RESOURCE_GROUP: helloworld_resource_group
+  STORAGE_ACCOUNT: helloworld844b
+  STORAGE_CONTAINER: function-releases
+  PYTHON_VERSION: '3.11'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python version
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Create and start virtual environment
-        run: |
-          python -m venv venv
-          source venv/bin/activate  # venv 활성화
-
-      - name: Install dependencies  # 여기가 핵심: -t ./ 로 루트에 설치
-        run: |
-          source venv/bin/activate  # 재활성화 (중요!)
-          pip install -r requirements.txt -t .  # 루트에 패키지 복사 (no venv)
-
-      - name: Zip artifact for deployment  # .python_packages 구조로 재구성
-        run: |
-          mkdir -p .python_packages/lib/site-packages
-          mv *.egg-info .python_packages/lib/site-packages/ 2>/dev/null || true
-          mv *.dist-info .python_packages/lib/site-packages/ 2>/dev/null || true
-          find . -name "*.pyc" -delete  # 불필요 파일 정리
-          zip release.zip ./* -r -x "venv/*" "__pycache__/*" "*.pyc"
-
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: |
+          mkdir -p .python_packages/lib/python${{ env.PYTHON_VERSION }}/site-packages
+          uv pip install --system --no-cache -r requirements.txt \
+            --target .python_packages/lib/python${{ env.PYTHON_VERSION }}/site-packages
+          zip -r release.zip . -x ".git/*" ".github/*" "__pycache__/*" "*.pyc" "*.zip" "venv/*"
+          zip -r release.zip .python_packages
+      - uses: actions/upload-artifact@v4
         with:
-          name: python-app
-          path: |
-            release.zip
-          retention-days: 1
+          name: release
+          path: release.zip
 
   deploy:
-    runs-on: ubuntu-latest
     needs: build
+    runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
-    environment:
-      name: 'production'  # OIDC 사용 시 추가 (선택)
+      id-token: write
     steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: python-app
-  
-      - name: Unzip artifact for deployment
-        run: |
-          unzip release.zip
-          rm release.zip
-  
-      - name: Login to Azure
+          name: release
+
+      - name: Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B51AABE81AB54614A688140E5CD15A21 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_E8839995F2FC441B9A929EE4F5C5BCEB }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_38315503FB544283B25778BC0432E22A }}
-  
-      - name: 'Deploy to Azure Functions'
-        uses: Azure/functions-action@v1
-        id: deploy-to-function
+
+      - name: Upload ZIP & Set WEBSITE_RUN_FROM_PACKAGE (via connection string)
+        uses: azure/CLI@v2
         with:
-          app-name: 'helloworld-func-app-v2'
-          slot-name: 'Production'
-          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          remote-build: true  # Azure에서 추가 빌드 (Oryx 활성화)
-          respect-funcignore: true  # .funcignore 존중
-            
+          inlineScript: |
+            set -e
+      
+            if [ -z "${{ secrets.STORAGE_CONNECTION_STRING }}" ]; then
+              echo "❌ STORAGE_CONNECTION_STRING is empty. Add repo secret first."
+              exit 1
+            fi
+      
+            ZIP_NAME="release-$(date +%Y%m%d%H%M%S).zip"
+            mv release.zip "$ZIP_NAME"
+      
+            # 컨테이너 생성 (있으면 통과)
+            az storage container create \
+              --name ${{ env.STORAGE_CONTAINER }} \
+              --connection-string "${{ secrets.STORAGE_CONNECTION_STRING }}" || true
+      
+            # 업로드
+            az storage blob upload \
+              --container-name ${{ env.STORAGE_CONTAINER }} \
+              --name "$ZIP_NAME" \
+              --file "$ZIP_NAME" \
+              --connection-string "${{ secrets.STORAGE_CONNECTION_STRING }}" \
+              --overwrite
+      
+            # SAS 생성 (읽기 권한, 30일)
+            EXPIRY=$(date -u -d "30 days" '+%Y-%m-%dT%H:%MZ')
+            SAS_URL=$(az storage blob generate-sas \
+              --container-name ${{ env.STORAGE_CONTAINER }} \
+              --name "$ZIP_NAME" \
+              --permissions r \
+              --expiry "$EXPIRY" \
+              --full-uri \
+              --connection-string "${{ secrets.STORAGE_CONNECTION_STRING }}" \
+              | tr -d '"')
+      
+            # Function App에 설정
+            az functionapp config appsettings set \
+              --name ${{ env.FUNCTION_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --settings WEBSITE_RUN_FROM_PACKAGE="$SAS_URL"
+      
+            az functionapp restart --name ${{ env.FUNCTION_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }}
+
+
