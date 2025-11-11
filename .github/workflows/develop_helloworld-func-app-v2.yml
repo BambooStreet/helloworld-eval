@@ -5,9 +5,9 @@ on:
     branches: [develop]
   workflow_dispatch:
 
-permissions:           # ← 최상단(전체 워크플로 기본 권한)
+permissions:
   contents: read
-  id-token: write      # ← OIDC 토큰 발급 허용
+  id-token: write
 
 env:
   FUNCTION_APP_NAME: helloworld-func-app-v2
@@ -21,16 +21,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
       - uses: astral-sh/setup-uv@v3
+
       - run: |
           mkdir -p .python_packages/lib/python${{ env.PYTHON_VERSION }}/site-packages
           uv pip install --system --no-cache -r requirements.txt \
             --target .python_packages/lib/python${{ env.PYTHON_VERSION }}/site-packages
+
+          # 👇 첫 번째 zip 명령어 하나만 남깁니다.
           zip -r release.zip . -x ".git/*" ".github/*" "__pycache__/*" "*.pyc" "*.zip" "venv/*"
-          zip -r release.zip .python_packages
+
       - uses: actions/upload-artifact@v4
         with:
           name: release
@@ -59,20 +64,20 @@ jobs:
         with:
           inlineScript: |
             set -e
-      
+
             if [ -z "${{ secrets.STORAGE_CONNECTION_STRING }}" ]; then
               echo "❌ STORAGE_CONNECTION_STRING is empty. Add repo secret first."
               exit 1
             fi
-      
+
             ZIP_NAME="release-$(date +%Y%m%d%H%M%S).zip"
             mv release.zip "$ZIP_NAME"
-      
+
             # 컨테이너 생성 (있으면 통과)
             az storage container create \
               --name ${{ env.STORAGE_CONTAINER }} \
               --connection-string "${{ secrets.STORAGE_CONNECTION_STRING }}" || true
-      
+
             # 업로드
             az storage blob upload \
               --container-name ${{ env.STORAGE_CONTAINER }} \
@@ -80,7 +85,7 @@ jobs:
               --file "$ZIP_NAME" \
               --connection-string "${{ secrets.STORAGE_CONNECTION_STRING }}" \
               --overwrite
-      
+
             # SAS 생성 (읽기 권한, 30일)
             EXPIRY=$(date -u -d "30 days" '+%Y-%m-%dT%H:%MZ')
             SAS_URL=$(az storage blob generate-sas \
@@ -91,13 +96,13 @@ jobs:
               --full-uri \
               --connection-string "${{ secrets.STORAGE_CONNECTION_STRING }}" \
               | tr -d '"')
-      
+
             # Function App에 설정
             az functionapp config appsettings set \
               --name ${{ env.FUNCTION_APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --settings WEBSITE_RUN_FROM_PACKAGE="$SAS_URL"
-      
-            az functionapp restart --name ${{ env.FUNCTION_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }}
 
-
+            az functionapp restart \
+              --name ${{ env.FUNCTION_APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }}
