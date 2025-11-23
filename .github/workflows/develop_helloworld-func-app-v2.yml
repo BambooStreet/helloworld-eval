@@ -34,9 +34,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_D4AF27ABA4A2427984D95D1ABF82774F }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2C3AA4921BB94A17A11B85A23F540B9F }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_4B1A43FD862046039E4C9B28766C3C74 }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # 3. 배포 (업로드/다운로드 과정 생략)
       - name: 'Deploy to Azure Functions'
@@ -46,4 +46,5 @@ jobs:
           app-name: 'helloworld-func-app'
           slot-name: 'Production'
           package: 'release.zip' # 위에서 만든 파일 바로 참조
+
 
