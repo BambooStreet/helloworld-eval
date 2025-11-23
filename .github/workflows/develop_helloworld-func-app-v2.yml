@@ -1,4 +1,4 @@
-name: Build and deploy Python project to Azure Function App - helloworld-func-app
+name: Build and deploy Python project to Azure Function App - helloworld-func-app-v2
 
 on:
   push:
@@ -43,8 +43,9 @@ jobs:
         uses: Azure/functions-action@v1
         id: deploy-to-function
         with:
-          app-name: 'helloworld-func-app'
+          app-name: 'helloworld-func-app-v2'
           slot-name: 'Production'
           package: 'release.zip' # 위에서 만든 파일 바로 참조
+
 
 
