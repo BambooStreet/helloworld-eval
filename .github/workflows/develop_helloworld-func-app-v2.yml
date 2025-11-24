@@ -8,7 +8,7 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' 
-  PYTHON_VERSION: '3.10' # Azure Function App의 버전과 일치시킬 것 (3.10 or 3.11)
+  PYTHON_VERSION: '3.10' # Azure 버전과 일치 (3.10 권장)
 
 jobs:
   build-and-deploy:
@@ -27,30 +27,31 @@ jobs:
 
       - name: Install dependencies (Flex Standard)
         run: |
-          # 1. Flex Consumption 표준 라이브러리 경로 생성
           mkdir -p .python_packages/lib/site-packages
-          
-          # 2. 해당 경로에 패키지 설치 (--target 옵션 사용)
           pip install --target="./.python_packages/lib/site-packages" -r requirements.txt
 
       - name: Zip artifact for deployment
         run: |
-          # [핵심 해결책]
-          # .python_packages 폴더는 점(.)으로 시작하는 숨김 폴더라서 
-          # 그냥 *로 압축하면 빠지는 경우가 많습니다. 
-          # 반드시 명시적으로 적어서 압축해야 합니다.
+          # 숨김 폴더(.python_packages)를 명시적으로 포함
           zip -r release.zip .python_packages . -x "venv/*" -x ".git/*" -x ".github/*" -x "__pycache__/*"
 
+      # [★여기 수정됨★] 스토리지 안 쓰고 로그에 파일 목록 찍기
+      - name: 🔍 Debug - List Zip Contents
+        run: |
+          echo "========== ZIP 파일 내부 검사 시작 =========="
+          # .python_packages 폴더가 들어있는지 검사
+          if unzip -l release.zip | grep -q ".python_packages/lib/site-packages"; then
+            echo "✅ 성공: .python_packages 폴더가 존재합니다."
+            echo "--- 포함된 파일 일부 예시 ---"
+            unzip -l release.zip | grep ".python_packages" | head -n 20
+          else
+            echo "❌ 실패: .python_packages 폴더가 없습니다!!"
+            # 전체 목록 출력해서 뭐가 들어갔나 확인
+            unzip -l release.zip
+            exit 1 
+          fi
+          echo "==========================================="
 
-      # [검증용] 만들어진 zip 파일을 GitHub 웹페이지에서 다운받을 수 있게 업로드
-      - name: Upload Build Artifact for Debugging
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-release-package
-          path: release.zip
-
-      # ... (Azure Login 및 Deploy 단계) ...
-      
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -65,4 +66,3 @@ jobs:
           app-name: 'helloworld-func-app-v2'
           slot-name: 'Production'
           package: 'release.zip'
-
