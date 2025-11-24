@@ -1,0 +1,54 @@
+name: Build and deploy Python project to Azure Function App - helloworld-func-app
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' 
+  PYTHON_VERSION: '3.11' # 현재 사용중인 버전 확인
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write 
+      contents: read 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python version
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # [중요] 패키지를 .python_packages 폴더에 미리 설치합니다.
+      # Flex Consumption은 이 폴더가 있으면 자동으로 인식합니다.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --target="./.python_packages/lib/site-packages" -r requirements.txt
+
+      # [중요] 압축할 때 .python_packages 폴더를 포함시킵니다.
+      - name: Zip artifact for deployment
+        run: |
+          zip release.zip ./* -r -x "venv/*" -x ".git/*" -x ".github/*"
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: 'Deploy to Azure Functions'
+        uses: Azure/functions-action@v1
+        id: deploy-to-function
+        with:
+          app-name: 'helloworld-func-app-v2' # 앱 이름 확인
+          slot-name: 'Production'
+          package: 'release.zip'
+          # scm-do-build-during-deployment 옵션 제거 (Flex 호환성)
