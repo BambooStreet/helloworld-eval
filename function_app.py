@@ -1,7 +1,17 @@
+
+import sys, os
+
+# 1. 무조건 최상단! 라이브러리 경로 강제 주입
+# 현재 파일(__file__)의 디렉토리 기준으로 .python_packages 경로를 찾음
+current_dir = os.path.dirname(os.path.abspath(__file__))
+package_path = os.path.join(current_dir, '.python_packages/lib/site-packages')
+sys.path.append(package_path)
+
 import azure.functions as func
 import logging
-import os
+
 import json
+from langchain_openai import ChatOpenAI
 
 app = func.FunctionApp()
 
@@ -242,7 +252,7 @@ def cv_generation(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("CV Generation function triggered.")
 
     try:
-        from langchain_openai import ChatOpenAI
+        
         from prompts import prompts
 
         # Azure Application Settings에서 환경변수 직접 가져오기
