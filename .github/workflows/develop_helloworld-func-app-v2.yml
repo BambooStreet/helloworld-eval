@@ -8,7 +8,7 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' 
-  PYTHON_VERSION: '3.10' # Azure 버전과 일치 (3.10 권장)
+  PYTHON_VERSION: '3.11'
 
 jobs:
   build-and-deploy:
@@ -80,4 +80,5 @@ jobs:
           app-name: 'helloworld-func-app-v2'
           slot-name: 'Production'
           package: 'release.zip'
+
 
