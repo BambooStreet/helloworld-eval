@@ -72,11 +72,11 @@ sympy
 tenacity
 tiktoken
 tokenizers
-torch==2.8.0
+torch
 tornado
 tqdm
 traitlets
-transformers==4.56.2
+transformers
 typing-extensions
 typing-inspection
 tzdata
