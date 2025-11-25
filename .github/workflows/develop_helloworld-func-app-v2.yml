@@ -25,11 +25,25 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies (Flex Standard)
+      - name: Install dependencies (Azure Compatibility Force)
         run: |
+          # 1. 기존 폴더 클린업
+          rm -rf .python_packages
           mkdir -p .python_packages/lib/site-packages
-          pip install --target="./.python_packages/lib/site-packages" -r requirements.txt
-
+          
+          # 2. [핵심] 호환성 강제 옵션 사용
+          # --platform manylinux2014_x86_64: Azure에서 100% 돌아가는 호환 버전 지정
+          # --only-binary=:all: 소스 컴파일 금지 (바이너리만 설치)
+          # --python-version 3.10: 파이썬 버전 명시
+          pip install \
+            --target="./.python_packages/lib/site-packages" \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.10 \
+            --only-binary=:all: \
+            --upgrade \
+            -r requirements.txt
+            
       - name: Zip artifact for deployment
         run: |
           # 숨김 폴더(.python_packages)를 명시적으로 포함
@@ -66,3 +80,4 @@ jobs:
           app-name: 'helloworld-func-app-v2'
           slot-name: 'Production'
           package: 'release.zip'
+
