@@ -206,66 +206,51 @@ class ChatModel:
             raise ValueError(f"Error in generate_ai_response: {str(e)}")
 
     # 스트리밍 응답 생성 함수 추가
-    def generate_ai_response_stream(
-        self, conversation_history, query, collection, mongo_query
-    ):
+    def generate_ai_response_stream(self, conversation_history, query, collection, mongo_query=None):
         """
-        스트리밍 방식으로 AI 응답을 생성하는 제너레이터 함수
+        OpenAI 스트리밍을 활용하여 실시간으로 답변 토큰을 생성하는 제너레이터
         """
         try:
             logging.info(f"Generating streaming response for query: {query}")
-            if mongo_query:
-                logging.info(f"Using query: {mongo_query}")
-
-            # 하이브리드 검색 수행 (키워드 + ANN)
+            
+            # 1. 하이브리드 검색 수행
             top_k = self.config["chat_config"]["top_k"]
             results_list = self.hybrid_search(query, mongo_query, collection, top_k)
-
-            logging.info(f"\n=== 하이브리드 검색 결과 (총 {len(results_list)}개) ===")
-
-            # 검색된 문서 ID들 추출
+            
             retrieved_doc_ids = [str(doc["_id"]) for doc in results_list]
 
-            # 컨텍스트 생성
+            # 2. 컨텍스트 생성
             if not results_list:
-                logging.info("검색된 문서가 없습니다.")
-                context = "일반적인 안내 정보..."
+                context = "관련된 문서를 찾을 수 없습니다."
             else:
                 context = ""
                 for idx, result in enumerate(results_list, 1):
-                    logging.info(f"[검색 결과 {idx}]")
-                    logging.info(f"문서 ID: {result.get('_id', 'N/A')}")
-                    logging.info(f"출처(URL): {result.get('url', 'N/A')}")
-                    
                     search_type = "키워드" if "keyword_score" in result else "벡터"
-                    context += f"""
-                    관련 사례 {idx} ({search_type} 검색, 출처: {result.get('url', 'N/A')}):
-                    {(result.get('contents') or result.get('title') or '')}
-                    """
+                    content = result.get('contents') or result.get('title') or ''
+                    context += f"\n관련 사례 {idx} ({search_type} 검색):\n{content}\n"
 
-            # 대화 히스토리 포맷팅
+            # 3. 프롬프트 구성
             max_messages = self.config["chat_config"]["prev_turns"]
-            formatted_conversation = "\n".join(
-                [
-                    f"{'사용자' if msg['speaker'] == 'human' else 'AI'}: {msg['utterance']}"
-                    for msg in conversation_history[-max_messages:]
-                ]
+            formatted_history = "\n".join(
+                [f"{'사용자' if msg['speaker'] == 'human' else 'AI'}: {msg['utterance']}" 
+                 for msg in conversation_history[-max_messages:]]
             )
 
-            # 프롬프트 생성
             filled_prompt = self.chat_template.format(
                 context=context,
-                conversation_history=formatted_conversation,
+                conversation_history=formatted_history,
                 query=query,
             )
 
-            # 먼저 메타데이터 전송 (검색된 문서 ID)
+            # 4. [메타데이터 전송] 검색된 문서 ID 등 정보를 먼저 보냄
             yield {
                 "type": "metadata",
-                "retrieved_doc_ids": retrieved_doc_ids
+                "retrieved_doc_ids": retrieved_doc_ids,
+                "reference_count": len(results_list)
             }
 
-            # 스트리밍 응답 생성
+            # 5. [콘텐츠 전송] OpenAI 스트리밍 호출 (토큰 단위)
+            # self.streaming_llm은 __init__에서 streaming=True로 설정됨
             for chunk in self.streaming_llm.stream(input=filled_prompt):
                 if chunk.content:
                     yield {
@@ -273,14 +258,11 @@ class ChatModel:
                         "content": chunk.content
                     }
 
-            # 완료 신호
+            # 6. [완료 신호]
             yield {
                 "type": "done"
             }
 
         except Exception as e:
             logging.error(f"Error in generate_ai_response_stream: {str(e)}")
-            yield {
-                "type": "error",
-                "error": str(e)
-            }
+            raise e

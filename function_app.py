@@ -219,33 +219,42 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
 
 
 # 스트리밍 응답 엔드포인트 (신규)
+# function_app.py
+
+import json
+import logging
+import azure.functions as func
+# (다른 import 구문 유지)
+
+# ... (기존 ChatService 클래스 등 유지) ...
+
 @app.route(route="question_stream", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"])
 def question_stream(req: func.HttpRequest) -> func.HttpResponse:
     """
-    스트리밍 방식으로 AI 응답을 생성하는 엔드포인트입니다.
-    OpenAI에서 토큰이 생성될 때마다 실시간으로 클라이언트에 전송합니다.
-    
-    Parameters:
-        req (func.HttpRequest): HTTP 요청 객체로, JSON 형식의 대화 내용을 포함
-        
-    Returns:
-        func.HttpResponse: SSE(Server-Sent Events) 형식의 스트리밍 응답
+    SSE(Server-Sent Events) 기반의 실시간 스트리밍 응답 API
     """
-    
     logging.info("Question streaming function triggered.")
     
     global chat_service
     
     try:
+        # ChatService 초기화 확인
         if not chat_service:
             chat_service = ChatService()
         
-        req_body = req.get_json()
+        # 요청 데이터 파싱
+        try:
+            req_body = req.get_json()
+        except ValueError:
+            return func.HttpResponse("Invalid JSON format", status_code=400)
+
         conversation = req_body.get("Conversation", [])
         
+        # 대화 내용 검증
         if not conversation:
             return func.HttpResponse("No conversation data provided", status_code=400)
         
+        # 마지막 사용자 발화 추출 (human speaker)
         user_query = next(
             (
                 item["utterance"]
@@ -258,31 +267,41 @@ def question_stream(req: func.HttpRequest) -> func.HttpResponse:
         if user_query is None:
             return func.HttpResponse("No user utterance found", status_code=400)
         
+        # SSE 데이터 생성 제너레이터 함수
         def generate():
             try:
-                # OpenAI 스트리밍 사용
+                # query_model.py의 스트리밍 메서드 호출
+                # 반환되는 chunk는 {"type": "content", "content": "토큰"} 형태의 딕셔너리임
                 for chunk in chat_service.model.generate_ai_response_stream(
                     conversation, user_query, chat_service.collection, mongo_query=None
                 ):
+                    # SSE 표준 포맷: "data: <JSON데이터>\n\n"
                     yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                
+                # (선택) 종료 이벤트 전송이 필요한 경우
+                # yield "event: close\ndata: [DONE]\n\n"
+
             except Exception as e:
                 logging.error(f"Streaming error: {str(e)}")
-                yield f"data: {json.dumps({'type': 'error', 'error': str(e)}, ensure_ascii=False)}\n\n"
-        
+                # 스트림 중간에 에러 발생 시 클라이언트에 에러 데이터 전송
+                error_data = json.dumps({"type": "error", "error": str(e)}, ensure_ascii=False)
+                yield f"data: {error_data}\n\n"
+
+        # HttpResponse에 제너레이터(iterator) 전달 및 mimetype 설정
         return func.HttpResponse(
             generate(),
+            status_code=200,
             mimetype="text/event-stream",
             headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"
+                "Cache-Control": "no-cache",           # 캐시 방지
+                "Connection": "keep-alive",            # 연결 유지
+                "X-Accel-Buffering": "no"              # Nginx 등 프록시 버퍼링 방지
             }
         )
     
     except Exception as e:
         logging.exception("Question streaming handler failed")
         return func.HttpResponse(f"An error occurred: {str(e)}", status_code=500)
-
 
 # 이력서 생성
 @app.route(route="cv_generation", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"])
