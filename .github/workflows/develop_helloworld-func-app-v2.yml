@@ -25,21 +25,22 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies (Azure Compatibility Force)
+      - name: Install dependencies (Azure Compatible Mode)
         run: |
-          # 1. 기존 폴더 클린업
+          # 1. 폴더 깨끗하게 초기화
           rm -rf .python_packages
           mkdir -p .python_packages/lib/site-packages
           
-          # 2. [핵심] 호환성 강제 옵션 사용
-          # --platform manylinux2014_x86_64: Azure에서 100% 돌아가는 호환 버전 지정
+          # 2. [핵심] 호환성 강제 옵션
+          # --platform manylinux2014_x86_64: Azure 리눅스 호환 버전 강제
+          # --implementation cp: CPython 구현체 명시
+          # --python-version 3.11: 파이썬 버전 명시
           # --only-binary=:all: 소스 컴파일 금지 (바이너리만 설치)
-          # --python-version 3.10: 파이썬 버전 명시
           pip install \
             --target="./.python_packages/lib/site-packages" \
             --platform manylinux2014_x86_64 \
             --implementation cp \
-            --python-version 3.10 \
+            --python-version 3.11 \
             --only-binary=:all: \
             --upgrade \
             -r requirements.txt
@@ -80,5 +81,6 @@ jobs:
           app-name: 'helloworld-func-app-v2'
           slot-name: 'Production'
           package: 'release.zip'
+
 
 
