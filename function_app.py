@@ -1,9 +1,8 @@
 import azure.functions as func
 import logging
 import sys, os
-
 import json
-from langchain_openai import ChatOpenAI
+
 
 app = func.FunctionApp()
 
@@ -298,8 +297,8 @@ def cv_generation(req: func.HttpRequest) -> func.HttpResponse:
         [희망직무]
         {req_body.get('desired_position', '상관없음')}
         """
-
-        # ChatGPT API 호출
+        from langchain_openai import ChatOpenAI
+        # ChatGPT API 호출 
         llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
 
         messages = [
