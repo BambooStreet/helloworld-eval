@@ -20,6 +20,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 디스크 공간 확보
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h
+
       - name: Setup Python version
         uses: actions/setup-python@v5
         with:
@@ -33,20 +42,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install azure-functions-core-tools-4
 
-      - name: Create virtual environment and install dependencies
+      - name: Install dependencies (no cache)
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install --no-cache-dir -r requirements.txt
 
       - name: 🔍 Debug - Verify project structure
         run: |
           echo "=== 프로젝트 구조 확인 ==="
-          echo "--- 필수 파일 확인 ---"
           ls -la function_app.py host.json requirements.txt
-          echo "--- host.json 내용 ---"
-          cat host.json
+          echo "--- 디스크 사용량 ---"
+          df -h
 
       - name: Login to Azure
         uses: azure/login@v2
