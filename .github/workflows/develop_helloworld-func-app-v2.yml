@@ -69,16 +69,37 @@ jobs:
               --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
               --setting-names SCM_DO_BUILD_DURING_DEPLOYMENT ENABLE_ORYX_BUILD || true
 
-      # Flex Consumption은 Azure CLI를 통한 직접 배포 사용
+      # Flex Consumption 전용 배포 (az functionapp deploy 사용)
       - name: 'Deploy to Azure Functions (Flex Consumption)'
         uses: azure/cli@v2
         with:
           inlineScript: |
-            az functionapp deployment source config-zip \
+            az functionapp deploy \
               --name ${{ secrets.AZURE_FUNCTIONAPP_NAME }} \
               --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-              --src release.zip \
-              --build-remote true
+              --src-path release.zip \
+              --type zip \
+              --async true
+
+      # 배포 완료 대기 (선택적)
+      - name: Wait for deployment to complete
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            echo "Waiting for deployment to stabilize..."
+            sleep 60
+            
+            echo "Checking function app status..."
+            az functionapp show \
+              --name ${{ secrets.AZURE_FUNCTIONAPP_NAME }} \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+              --query "state" -o tsv
+            
+            echo "Listing functions..."
+            az functionapp function list \
+              --name ${{ secrets.AZURE_FUNCTIONAPP_NAME }} \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+              --query "[].name" -o tsv || echo "Functions not yet available (this is normal for Flex Consumption)"
 
 
 
