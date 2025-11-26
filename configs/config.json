@@ -12,7 +12,8 @@
         "max_tokens" : 2048,
         "top_k" : 20,
         "numCandidates" : 200,
-        "prev_turns" : 6
+        "prev_turns" : 6,
+        "temperature" : 0.7
     },
 
     "resume_config" : {
