@@ -1,0 +1,37 @@
+[
+  {
+    "conversation": "[{\"speaker\": \"human\", \"utterance\": \"외국인 근로자 비자 종류에 대해 알려주세요.\"}]",
+    "expected_status": 200,
+    "description": "단일 질문"
+  },
+  {
+    "conversation": "[{\"speaker\": \"human\", \"utterance\": \"E-9 비자가 무엇인가요?\"}, {\"speaker\": \"ai\", \"utterance\": \"E-9 비자는 비전문취업 비자입니다.\"}, {\"speaker\": \"human\", \"utterance\": \"그럼 E-7 비자는요?\"}]",
+    "expected_status": 200,
+    "description": "대화 이력 포함"
+  },
+  {
+    "conversation": "[{\"speaker\": \"human\", \"utterance\": \"안녕하세요\"}, {\"speaker\": \"ai\", \"utterance\": \"안녕하세요! 무엇을 도와드릴까요?\"}, {\"speaker\": \"human\", \"utterance\": \"취업 비자에 대해 알고 싶어요\"}, {\"speaker\": \"ai\", \"utterance\": \"취업 비자는 여러 종류가 있습니다.\"}, {\"speaker\": \"human\", \"utterance\": \"신청 방법을 알려주세요\"}]",
+    "expected_status": 200,
+    "description": "긴 대화 이력"
+  },
+  {
+    "conversation": "[]",
+    "expected_status": 400,
+    "description": "빈 대화 (에러)"
+  },
+  {
+    "conversation": "[{\"speaker\": \"ai\", \"utterance\": \"안녕하세요, 무엇을 도와드릴까요?\"}]",
+    "expected_status": 400,
+    "description": "AI 발화만 있는 경우 (에러)"
+  },
+  {
+    "conversation": "[{\"speaker\": \"human\", \"utterance\": \"외국인 고용허가제란 무엇인가요?\"}]",
+    "expected_status": 200,
+    "description": "고용허가제 질문"
+  },
+  {
+    "conversation": "[{\"speaker\": \"human\", \"utterance\": \"체류 기간 연장은 어떻게 하나요?\"}]",
+    "expected_status": 200,
+    "description": "체류 기간 질문"
+  }
+]
