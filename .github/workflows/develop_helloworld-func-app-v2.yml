@@ -34,8 +34,6 @@ jobs:
 
       - name: Zip artifact for deployment (Flex Consumption 방식)
         run: |
-          # Flex Consumption: 소스코드 + requirements.txt만 배포
-          # Azure가 원격에서 빌드함
           zip -r release.zip . \
             -x ".venv/*" \
             -x "venv/*" \
@@ -61,27 +59,26 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # [수정] FUNCTIONS_WORKER_RUNTIME 제거 - Flex Consumption에서 금지됨
-      - name: Configure App Settings for Remote Build
+      # Flex Consumption에서 지원되지 않는 설정 제거
+      - name: Remove unsupported App Settings
         uses: azure/cli@v2
         with:
           inlineScript: |
-            az functionapp config appsettings set \
+            az functionapp config appsettings delete \
               --name ${{ secrets.AZURE_FUNCTIONAPP_NAME }} \
               --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-              --settings \
-                "ENABLE_ORYX_BUILD=true" \
-                "SCM_DO_BUILD_DURING_DEPLOYMENT=true"
+              --setting-names SCM_DO_BUILD_DURING_DEPLOYMENT ENABLE_ORYX_BUILD || true
 
-      - name: 'Deploy to Azure Functions'
-        uses: Azure/functions-action@v1
-        id: deploy-to-function
+      # Flex Consumption은 Azure CLI를 통한 직접 배포 사용
+      - name: 'Deploy to Azure Functions (Flex Consumption)'
+        uses: azure/cli@v2
         with:
-          app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}
-          slot-name: 'Production'
-          package: 'release.zip'
-          scm-do-build-during-deployment: true
-          enable-oryx-build: true
+          inlineScript: |
+            az functionapp deployment source config-zip \
+              --name ${{ secrets.AZURE_FUNCTIONAPP_NAME }} \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+              --src release.zip \
+              --build-remote true
 
 
 
