@@ -3,7 +3,6 @@ import logging
 import sys, os
 import json
 
-
 app = func.FunctionApp()
 
 # 전역 변수 선언
@@ -59,6 +58,9 @@ class ChatService:
     """
 
     def __init__(self):
+        self.model = None
+        self.collection = None
+        self.client = None
         self.initialize()
 
     def initialize(self):
@@ -69,14 +71,29 @@ class ChatService:
         """
         logging.info("====== Application initialization started ======")
 
-        with open('configs/config.json', "r", encoding='utf-8') as f:
-            self.config = json.load(f)
-            self.db_name = self.config['path']['db_name']
-            self.collection_name = self.config['path']['collection_name']
+        try:
+            config_path = os.path.join(os.path.dirname(__file__), 'configs', 'config.json')
+            with open(config_path, "r", encoding='utf-8') as f:
+                self.config = json.load(f)
+                self.db_name = self.config['path']['db_name']
+                self.collection_name = self.config['path']['collection_name']
+        except FileNotFoundError as e:
+            logging.error(f"Config file not found: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            logging.error(f"Config JSON parse error: {e}")
+            raise
         
-        # Lazy import
-        from query_model import ChatModel
-        self.model = ChatModel(self.config)
+        # Lazy import with error handling
+        try:
+            from query_model import ChatModel
+            self.model = ChatModel(self.config)
+        except ImportError as e:
+            logging.error(f"Failed to import ChatModel: {e}")
+            raise
+        except Exception as e:
+            logging.error(f"Failed to initialize ChatModel: {e}")
+            raise
 
         # Azure Application Settings에서 환경변수 직접 가져오기
         mongodb_uri = os.getenv("MONGODB_URI")

@@ -25,47 +25,34 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies (Azure Compatible Mode)
+      - name: Create virtual environment and install dependencies
         run: |
-          # 1. 폴더 깨끗하게 초기화
-          rm -rf .python_packages
-          mkdir -p .python_packages/lib/site-packages
-          
-          # 2. [핵심] 호환성 강제 옵션
-          # --platform manylinux2014_x86_64: Azure 리눅스 호환 버전 강제
-          # --implementation cp: CPython 구현체 명시
-          # --python-version 3.11: 파이썬 버전 명시
-          # --only-binary=:all: 소스 컴파일 금지 (바이너리만 설치)
-          pip install \
-            --target="./.python_packages/lib/site-packages" \
-            --platform manylinux2014_x86_64 \
-            --implementation cp \
-            --python-version 3.11 \
-            --only-binary=:all: \
-            --upgrade \
-            -r requirements.txt
-            
-      - name: Zip artifact for deployment
-        run: |
-          # 숨김 폴더(.python_packages)를 명시적으로 포함
-          zip -r release.zip .python_packages . -x "venv/*" -x ".git/*" -x ".github/*" -x "__pycache__/*"
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-      # [★여기 수정됨★] 스토리지 안 쓰고 로그에 파일 목록 찍기
-      - name: 🔍 Debug - List Zip Contents
+      - name: Zip artifact for deployment (Flex Consumption 방식)
         run: |
-          echo "========== ZIP 파일 내부 검사 시작 =========="
-          # .python_packages 폴더가 들어있는지 검사
-          if unzip -l release.zip | grep -q ".python_packages/lib/site-packages"; then
-            echo "✅ 성공: .python_packages 폴더가 존재합니다."
-            echo "--- 포함된 파일 일부 예시 ---"
-            unzip -l release.zip | grep ".python_packages" | head -n 20
-          else
-            echo "❌ 실패: .python_packages 폴더가 없습니다!!"
-            # 전체 목록 출력해서 뭐가 들어갔나 확인
-            unzip -l release.zip
-            exit 1 
-          fi
-          echo "==========================================="
+          # Flex Consumption: 소스코드 + requirements.txt만 배포
+          # Azure가 원격에서 빌드함
+          zip -r release.zip . \
+            -x ".venv/*" \
+            -x "venv/*" \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "__pycache__/*" \
+            -x "*.pyc" \
+            -x ".python_packages/*" \
+            -x "local.settings.json"
+
+      - name: 🔍 Debug - Verify zip contents
+        run: |
+          echo "=== ZIP 파일 검사 ==="
+          echo "--- 필수 파일 확인 ---"
+          unzip -l release.zip | grep -E "(function_app\.py|host\.json|requirements\.txt)"
+          echo "--- 전체 크기 ---"
+          ls -lh release.zip
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -74,6 +61,18 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # [수정] FUNCTIONS_WORKER_RUNTIME 제거 - Flex Consumption에서 금지됨
+      - name: Configure App Settings for Remote Build
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az functionapp config appsettings set \
+              --name helloworld-func-app-v2 \
+              --resource-group <YOUR_RESOURCE_GROUP> \
+              --settings \
+                "ENABLE_ORYX_BUILD=true" \
+                "SCM_DO_BUILD_DURING_DEPLOYMENT=true"
+
       - name: 'Deploy to Azure Functions'
         uses: Azure/functions-action@v1
         id: deploy-to-function
@@ -81,6 +80,8 @@ jobs:
           app-name: 'helloworld-func-app-v2'
           slot-name: 'Production'
           package: 'release.zip'
+          scm-do-build-during-deployment: true
+          enable-oryx-build: true
 
 
 
