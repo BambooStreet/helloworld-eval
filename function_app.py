@@ -218,6 +218,86 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(f"An error occurred: {str(e)}", status_code=500)
 
 
+# 스트리밍 응답 엔드포인트 (신규)
+@app.route(route="question_stream", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"])
+def question_stream(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    스트리밍 방식으로 AI 응답을 생성하는 엔드포인트입니다.
+    
+    Parameters:
+        req (func.HttpRequest): HTTP 요청 객체로, JSON 형식의 대화 내용을 포함
+        
+        예시 JSON 형식:
+        {
+            "Conversation": [
+                {"speaker": "human", "utterance":"질문 내용"},
+                {"speaker": "ai", "utterance": "이전 답변"}
+            ]
+        }
+    
+    Returns:
+        func.HttpResponse: SSE(Server-Sent Events) 형식의 스트리밍 응답
+        - data: {"type": "metadata", "retrieved_doc_ids": [...]}
+        - data: {"type": "content", "content": "토큰"}
+        - data: {"type": "done"}
+    """
+    
+    logging.info("Question streaming function triggered.")
+    
+    global chat_service
+    
+    try:
+        if not chat_service:
+            chat_service = ChatService()
+        
+        # 요청 본문 파싱
+        req_body = req.get_json()
+        conversation = req_body.get("Conversation", [])
+        
+        if not conversation:
+            return func.HttpResponse("No conversation data provided", status_code=400)
+        
+        # 마지막 사용자 발화 추출
+        user_query = next(
+            (
+                item["utterance"]
+                for item in reversed(conversation)
+                if item["speaker"] == "human"
+            ),
+            None,
+        )
+        
+        if user_query is None:
+            return func.HttpResponse("No user utterance found", status_code=400)
+        
+        # 스트리밍 제너레이터 함수
+        def generate():
+            try:
+                for chunk in chat_service.model.generate_ai_response_stream(
+                    conversation, user_query, chat_service.collection, mongo_query=None
+                ):
+                    # SSE 형식으로 데이터 전송
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                logging.error(f"Streaming error: {str(e)}")
+                yield f"data: {json.dumps({'type': 'error', 'error': str(e)}, ensure_ascii=False)}\n\n"
+        
+        # SSE 응답 반환
+        return func.HttpResponse(
+            generate(),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"  # nginx 버퍼링 비활성화
+            }
+        )
+    
+    except Exception as e:
+        logging.exception("Question streaming handler failed")
+        return func.HttpResponse(f"An error occurred: {str(e)}", status_code=500)
+
+
 # 이력서 생성
 @app.route(route="cv_generation", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"])
 def cv_generation(req: func.HttpRequest) -> func.HttpResponse:
