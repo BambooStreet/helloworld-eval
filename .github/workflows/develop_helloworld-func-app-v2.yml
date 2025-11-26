@@ -25,6 +25,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Install Azure Functions Core Tools
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
+          sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
+          sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(lsb_release -cs) main" > /etc/apt/sources.list.d/dotnetdev.list'
+          sudo apt-get update
+          sudo apt-get install azure-functions-core-tools-4
+
       - name: Create virtual environment and install dependencies
         run: |
           python -m venv .venv
@@ -32,25 +40,13 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Zip artifact for deployment (Flex Consumption 방식)
+      - name: 🔍 Debug - Verify project structure
         run: |
-          zip -r release.zip . \
-            -x ".venv/*" \
-            -x "venv/*" \
-            -x ".git/*" \
-            -x ".github/*" \
-            -x "__pycache__/*" \
-            -x "*.pyc" \
-            -x ".python_packages/*" \
-            -x "local.settings.json"
-
-      - name: 🔍 Debug - Verify zip contents
-        run: |
-          echo "=== ZIP 파일 검사 ==="
+          echo "=== 프로젝트 구조 확인 ==="
           echo "--- 필수 파일 확인 ---"
-          unzip -l release.zip | grep -E "(function_app\.py|host\.json|requirements\.txt)"
-          echo "--- 전체 크기 ---"
-          ls -lh release.zip
+          ls -la function_app.py host.json requirements.txt
+          echo "--- host.json 내용 ---"
+          cat host.json
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -69,19 +65,12 @@ jobs:
               --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
               --setting-names SCM_DO_BUILD_DURING_DEPLOYMENT ENABLE_ORYX_BUILD || true
 
-      # Flex Consumption 전용 배포 (az functionapp deploy 사용)
+      # Azure Functions Core Tools를 사용한 배포
       - name: 'Deploy to Azure Functions (Flex Consumption)'
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            az functionapp deploy \
-              --name ${{ secrets.AZURE_FUNCTIONAPP_NAME }} \
-              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-              --src-path release.zip \
-              --type zip \
-              --async true
+        run: |
+          func azure functionapp publish ${{ secrets.AZURE_FUNCTIONAPP_NAME }} --python --build remote
 
-      # 배포 완료 대기 (선택적)
+      # 배포 완료 대기
       - name: Wait for deployment to complete
         uses: azure/cli@v2
         with:
