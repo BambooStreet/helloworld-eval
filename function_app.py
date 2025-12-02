@@ -213,26 +213,23 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
         # 요청 본문에서 JSON 데이터를 가져오고, Conversation 필드를 추출
         req_body = req.get_json()
         conversation = req_body.get("Conversation", [])
-
-        # Conversation이 없으면 오류 메시지를 반환
-        if not conversation:
-            return func.HttpResponse("No conversation data provided", status_code=400)
+        if conversation is None:
+            conversation = []
 
         # 마지막으로 입력된 사용자 발화를 추출
-        user_query = next(
-            (
-                item["utterance"]
-                for item in reversed(conversation)
-                if item["speaker"] == "human"
-            ),
-            None,
-        )
-
-        # 사용자 쿼리 검증
-        if user_query is None:
-            return func.HttpResponse("No user utterance found", status_code=400)
-
         explicit_query = req_body.get("query")
+        if explicit_query is None or str(explicit_query).strip() == "":
+            user_query = next(
+                (
+                    item["utterance"]
+                    for item in reversed(conversation)
+                    if item.get("speaker") == "human"
+                ),
+                None,
+            )
+            if not user_query:
+                return func.HttpResponse("No query provided", status_code=400)
+            explicit_query = user_query
 
         mongo_query = None
         if "mongo_query" in req_body:
@@ -245,7 +242,7 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
                     status_code=400,
                 )
 
-        effective_query = explicit_query or user_query
+        effective_query = explicit_query
 
         # 응답 생성 (수정된 시그니처)
         response = chat_service.get_query_model_response_with_docs(
@@ -278,21 +275,22 @@ def question_stream(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("Invalid JSON format", status_code=400)
 
     conversation = req_body.get("Conversation", [])
-    if not conversation:
-        return func.HttpResponse("No conversation data provided", status_code=400)
-
-    user_query = next(
-        (
-            item.get("utterance")
-            for item in reversed(conversation)
-            if item.get("speaker") == "human"
-        ),
-        None,
-    )
-    if user_query is None:
-        return func.HttpResponse("No user utterance found", status_code=400)
+    if conversation is None:
+        conversation = []
 
     explicit_query = req_body.get("query")
+    if explicit_query is None or str(explicit_query).strip() == "":
+        user_query = next(
+            (
+                item.get("utterance")
+                for item in reversed(conversation)
+                if item.get("speaker") == "human"
+            ),
+            None,
+        )
+        if not user_query:
+            return func.HttpResponse("No query provided", status_code=400)
+        explicit_query = user_query
 
     mongo_query = None
     if "mongo_query" in req_body:
@@ -305,7 +303,7 @@ def question_stream(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400,
             )
 
-    effective_query = explicit_query or user_query
+    effective_query = explicit_query
 
     try:
         if not chat_service:
