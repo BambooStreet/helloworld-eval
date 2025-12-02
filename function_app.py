@@ -4,6 +4,8 @@ import sys, os
 import json
 from openai import OpenAI
 
+from utils import parse_mongo_query
+
 app = func.FunctionApp()
 
 # 전역 변수 선언
@@ -133,25 +135,41 @@ class ChatService:
         try:
             # 키워드 기반 모델 답변 생성
             response = self.model.generate_ai_response(
-                conversation_history, 
-                query_text, 
-                self.collection, 
-                mongo_query=mongo_query
+                conversation_history,
+                query_text,
+                self.collection,
+                mongo_query=mongo_query,
             )
             
             return {
                 "answer": response["answer"],
                 "retrieved_doc_ids": response["retrieved_doc_ids"],
-                "retrieved_docs": response["retrieved_docs"]
+                "retrieved_docs": response["retrieved_docs"],
             }
             
         except Exception as e:
-            print(f"오류 발생: {e}")
+            logging.error("Error retrieving documents: %s", e)
             return {
                 "answer": "ERROR",
                 "retrieved_doc_ids": [],
-                "retrieved_docs": []
+                "retrieved_docs": [],
             }
+
+    def stream_query_model_response_with_docs(
+        self, conversation_history, query_text, mongo_query=None
+    ):
+        """스트리밍 응답을 생성하는 제너레이터."""
+
+        try:
+            yield from self.model.generate_ai_response_stream(
+                conversation_history,
+                query_text,
+                self.collection,
+                mongo_query=mongo_query,
+            )
+        except Exception as exc:
+            logging.error("Error during streaming response: %s", exc)
+            raise
 
 
 # 사용자 요청 수신
@@ -214,8 +232,25 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
         if user_query is None:
             return func.HttpResponse("No user utterance found", status_code=400)
 
+        explicit_query = req_body.get("query")
+
+        mongo_query = None
+        if "mongo_query" in req_body:
+            try:
+                mongo_query = parse_mongo_query(req_body.get("mongo_query"))
+            except Exception as exc:
+                logging.error("Invalid mongo_query provided: %s", exc)
+                return func.HttpResponse(
+                    "Invalid mongo_query provided",
+                    status_code=400,
+                )
+
+        effective_query = explicit_query or user_query
+
         # 응답 생성 (수정된 시그니처)
-        response = chat_service.get_query_model_response_with_docs(conversation, user_query)
+        response = chat_service.get_query_model_response_with_docs(
+            conversation, effective_query, mongo_query=mongo_query
+        )
 
         # 응답에서 references 제외하고 answer만 반환
         # 클라이언트에게 답변 텍스트만 전달 된다.
@@ -236,6 +271,7 @@ def question_stream(req: func.HttpRequest) -> func.HttpResponse:
     SSE(Server-Sent Events) 기반의 실시간 스트리밍 응답 API
     """
     logging.info("Question streaming function triggered.")
+    global chat_service
     try:
         req_body = req.get_json()
     except ValueError:
@@ -256,43 +292,39 @@ def question_stream(req: func.HttpRequest) -> func.HttpResponse:
     if user_query is None:
         return func.HttpResponse("No user utterance found", status_code=400)
 
-    try:
-        client = get_openai_client()
-    except Exception as exc:
-        logging.exception("Failed to initialize OpenAI client")
-        return func.HttpResponse(f"An error occurred: {exc}", status_code=500)
+    explicit_query = req_body.get("query")
 
-    model_name = os.getenv("OPENAI_STREAM_MODEL", "gpt-4o")
-    messages = []
-    for item in conversation:
-        speaker = item.get("speaker")
-        utterance = item.get("utterance", "")
-        if speaker == "human":
-            role = "user"
-        elif speaker == "ai":
-            role = "assistant"
-        elif speaker == "system":
-            role = "system"
-        else:
-            continue
-        messages.append({"role": role, "content": utterance})
+    mongo_query = None
+    if "mongo_query" in req_body:
+        try:
+            mongo_query = parse_mongo_query(req_body.get("mongo_query"))
+        except Exception as exc:
+            logging.error("Invalid mongo_query provided: %s", exc)
+            return func.HttpResponse(
+                "Invalid mongo_query provided",
+                status_code=400,
+            )
+
+    effective_query = explicit_query or user_query
+
+    try:
+        if not chat_service:
+            chat_service = ChatService()
+    except Exception as exc:
+        logging.exception("Failed to initialize chat service for streaming")
+        return func.HttpResponse(f"An error occurred: {exc}", status_code=500)
 
     def stream_response():
         try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                stream=True,
+            streaming_generator = chat_service.stream_query_model_response_with_docs(
+                conversation,
+                effective_query,
+                mongo_query=mongo_query,
             )
-            for chunk in response:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    payload = json.dumps(
-                        {"type": "content", "content": delta.content},
-                        ensure_ascii=False,
-                    )
-                    yield f"data: {payload}\n\n"
-            yield "data: [DONE]\n\n"
+
+            for chunk in streaming_generator:
+                payload = json.dumps(chunk, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
         except Exception as exc:
             logging.error("Streaming error: %s", exc)
             error_payload = json.dumps(
