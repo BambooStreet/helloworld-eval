@@ -10,3 +10,4 @@ pydantic
 tiktoken
 requests
 python-dateutil
+python-dotenv
