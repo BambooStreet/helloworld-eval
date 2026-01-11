@@ -5,7 +5,8 @@ LLM은 gpt-4o-mini이며, 응답은 **오직 JSON** 으로 반환합니다.
 ## 출력 스키마 (JSON only)
 {
   "translated": "<한국어 번역문>",
-  "mongo_query": [ <MongoDB Aggregation Pipeline 배열> ]
+  "mongo_query": [ <MongoDB Aggregation Pipeline 배열> ],
+  "query_lang": "<원문 쿼리 언어명 (English)>"
 }
 
 ## 작업 순서
@@ -15,6 +16,7 @@ LLM은 gpt-4o-mini이며, 응답은 **오직 JSON** 으로 반환합니다.
    - index: "text"
    - path: ["title","contents"]
    - 분석기는 인덱스에서 관리(쿼리에서 강제하지 않음)
+3) 원문이 어떤 언어인지 판단하여, `query_lang`에 **언어 이름을 영어로** 표기한다 (예: "Korean", "Thai").
 
 ## 쿼리 폭발 방지 규칙(필수)
 - 키워드 3~5개, 각 1~3단어. 일반어/불용어 제외, 동의어 표준화.
@@ -43,7 +45,7 @@ LLM은 gpt-4o-mini이며, 응답은 **오직 JSON** 으로 반환합니다.
           "should": [
             {
               "text": {
-                "query": ["<키워드1>", "<키워드2>", "<키워드3>", <키워드4>",
+                "query": ["<키워드1>", "<키워드2>", "<키워드3>", "<키워드4>"],
                 "path": ["title","contents"],
                 "fuzzy": { "maxEdits": 1, "prefixLength": 2 }
               }
@@ -54,7 +56,7 @@ LLM은 gpt-4o-mini이며, 응답은 **오직 JSON** 으로 반환합니다.
                 "path": "title",
                 "slop": 2
               }
-            }>
+            }
           ],
           "minimumShouldMatch": 1
         },
@@ -72,7 +74,8 @@ LLM은 gpt-4o-mini이며, 응답은 **오직 JSON** 으로 반환합니다.
       }
     },
     { "$limit": 20 }
-  ]
+  ],
+  "query_lang": "<원문 언어명>"
 }
 
 ## 예시 (입력 → 출력)
@@ -119,7 +122,8 @@ LLM은 gpt-4o-mini이며, 응답은 **오직 JSON** 으로 반환합니다.
       }
     },
     { "$limit": 20 }
-  ]
+  ],
+  "query_lang": "Thai"
 }
 
 ### 주의
@@ -135,6 +139,7 @@ CHAT_PROMPT = """당신은 노동 법률에 대한 전문적 지식을 가지고
 - <대화기록>을 통해 대화의 맥락을 파악하고, 사용자의 요구 사항을 이해하세요. 
 - <관련문서>를 참조하여 **질문**에 대한 정확도 높은 **답변**을 제공하세요.
 - 이전 답변을 반복하지 마세요.
+- 사용자의 질문 언어(`{answer_language}`)로 자연스럽게 답변하세요.
 
 <관련문서>
 {context}
@@ -145,6 +150,7 @@ CHAT_PROMPT = """당신은 노동 법률에 대한 전문적 지식을 가지고
 </대화기록>
 
 질문 : {query}
+답변 언어 : {answer_language}
 답변 : 
 """
 

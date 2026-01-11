@@ -105,46 +105,66 @@ Functions:
 4. Body 탭:
    - `raw` 선택
    - 드롭다운에서 `JSON` 선택
-   - 아래 JSON 입력:
+   - 아래 스키마에 맞게 입력
 
-### 테스트 케이스 1: 기본 질문
+### 입력 본문 스키마
 ```json
 {
     "Conversation": [
-        {
-            "speaker": "human",
-            "utterance": "베트남 국적의 외국인이 한국에서 취업하려면 어떤 비자가 필요한가요?"
-        }
+        { "speaker": "human", "utterance": "..." },
+        { "speaker": "ai", "utterance": "..." }
+    ],
+    "query": "<현재 사용자 질문 (원문 언어)>",
+    "mongo_query": [
+        { "$search": { "index": "text", "compound": { "should": [] } } }
     ]
 }
 ```
+- `Conversation` *(선택)*: 직전 대화 기록. 새 입력은 서버가 자동으로 번역하여 이 배열의 마지막에 append 됩니다.
+- `query` *(필수)*: 사용자가 입력한 **원문 메시지**. 한국어가 아니어도 되며, 서버가 GPT-4o-mini 기반 `TranslateModel`로 번역/언어 감지를 수행합니다.
+- `mongo_query` *(선택)*: MongoDB 파이프라인을 직접 지정하고 싶을 때 제공. 값이 없으면 LLM이 `QUERY_TRANSLATE_PROMPT`를 활용해 자동 생성합니다.
 
-### 테스트 케이스 2: 대화 히스토리 포함
+> ⚙️ 내부 동작 요약
+> 1. 입력 `query`를 GPT-4o-mini가 번역하고 `query_lang`을 판별합니다.
+> 2. 생성된 번역문과 `mongo_query`가 `ChatModel`로 전달됩니다.
+> 3. `ChatModel`은 탐색된 문서를 기반으로 **사용자 언어(`query_lang`)**에 맞춰 답변을 생성합니다.
+
+### 출력 스키마
+```json
+{
+    "answer": "<탐색 결과를 요약한 응답 (입력 언어와 동일)>"
+}
+```
+- `answer`: 검색 결과를 반영한 최종 텍스트. 시스템이 감지한 언어(`query_lang`)로 응답합니다.
+
+### 테스트 케이스 1: 한국어 질문
 ```json
 {
     "Conversation": [
-        {
-            "speaker": "human",
-            "utterance": "E-7 비자가 뭔가요?"
-        },
-        {
-            "speaker": "ai",
-            "utterance": "E-7 비자는 특정활동 비자로 전문 인력을 위한 취업 비자입니다."
-        },
-        {
-            "speaker": "human",
-            "utterance": "신청 방법을 알려주세요"
-        }
-    ]
+        { "speaker": "human", "utterance": "E-7 비자가 뭔가요?" },
+        { "speaker": "ai", "utterance": "E-7 비자는 전문 인력을 위한 취업 비자입니다." }
+    ],
+    "query": "신청 방법을 알려주세요"
+}
+```
+
+### 테스트 케이스 2: 다국어 질문 (태국어)
+```json
+{
+    "Conversation": [
+        { "speaker": "human", "utterance": "E-7 visa 신청 방법" }
+    ],
+    "query": "ภรรยาชาวไทยของผมต้องทำอย่างไรเพื่อขอวีซ่าทำงานในเกาหลี?"
 }
 ```
 
 ### 예상 응답 (200 OK)
 ```json
 {
-    "answer": "베트남 국적의 외국인이 한국에서 취업하기 위해서는 E-7(특정활동) 비자나 E-9(비전문취업) 비자가 필요합니다..."
+    "answer": "ภรรยาควรตรวจสอบว่าตรงตามเงื่อนไข E-7 หรือไม่..." 
 }
 ```
+→ 입력 언어가 태국어였으므로, 응답도 태국어로 반환됩니다.
 
 ### 오류 케이스
 - Conversation 누락:

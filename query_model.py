@@ -1,6 +1,37 @@
 import logging
+import time
+from typing import Optional
+
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from prompts import prompts
+
+LANG_CODE_TO_NAME = {
+    "ko": "korean",
+    "en": "english",
+    "ja": "japanese",
+    "zh": "chinese",
+    "vi": "vietnamese",
+    "th": "thai",
+    "id": "indonesian",
+    "ms": "malay",
+    "es": "spanish",
+    "fr": "french",
+    "ru": "russian",
+}
+
+LANG_NAME_TO_DISPLAY = {
+    "korean": "한국어",
+    "english": "English",
+    "japanese": "日本語",
+    "chinese": "中文",
+    "vietnamese": "Tiếng Việt",
+    "thai": "Thai",
+    "indonesian": "Bahasa Indonesia",
+    "malay": "Bahasa Melayu",
+    "spanish": "Español",
+    "french": "Français",
+    "russian": "Русский",
+}
 
 class ChatModel:
     def __init__(self, config):
@@ -135,7 +166,7 @@ class ChatModel:
 
     # 응답 생성 함수 (키워드 지원)
     def generate_ai_response(
-        self, conversation_history, query, collection, mongo_query
+        self, conversation_history, query, collection, mongo_query, query_lang=None
     ):
         try:
             logging.info(f"Generating response for query: {query}")
@@ -144,7 +175,15 @@ class ChatModel:
 
             # 하이브리드 검색 수행 (키워드 + ANN)
             top_k = self.config["chat_config"]["top_k"]
+
+            search_start = time.perf_counter()
             results_list = self.hybrid_search(query, mongo_query, collection, top_k)
+            search_duration = time.perf_counter() - search_start
+            logging.info(
+                "[Search] Retrieved %d docs in %.2f s",
+                len(results_list),
+                search_duration,
+            )
 
             logging.info(f"\n=== 하이브리드 검색 결과 (총 {len(results_list)}개) ===")
 
@@ -187,13 +226,23 @@ class ChatModel:
             )
 
             # 전역 프롬프트 템플릿 사용
+            answer_language = self._resolve_answer_language(query_lang)
+
             filled_prompt = self.chat_template.format(
                 context=context,
                 conversation_history=formatted_conversation,
                 query=query,
+                answer_language=answer_language,
             )
 
+            answer_start = time.perf_counter()
             output = self.llm.invoke(input=filled_prompt)
+            answer_duration = time.perf_counter() - answer_start
+            logging.info(
+                "[Answer] LLM completed in %.2f s (chars=%d)",
+                answer_duration,
+                len(output.content or ""),
+            )
 
             return {
                 "answer": output.content,
@@ -206,7 +255,14 @@ class ChatModel:
             raise ValueError(f"Error in generate_ai_response: {str(e)}")
 
     # 스트리밍 응답 생성 함수 추가
-    def generate_ai_response_stream(self, conversation_history, query, collection, mongo_query=None):
+    def generate_ai_response_stream(
+        self,
+        conversation_history,
+        query,
+        collection,
+        mongo_query=None,
+        query_lang=None,
+    ):
         """
         OpenAI 스트리밍을 활용하여 실시간으로 답변 토큰을 생성하는 제너레이터
         """
@@ -215,7 +271,14 @@ class ChatModel:
             
             # 1. 하이브리드 검색 수행
             top_k = self.config["chat_config"]["top_k"]
+            search_start = time.perf_counter()
             results_list = self.hybrid_search(query, mongo_query, collection, top_k)
+            search_duration = time.perf_counter() - search_start
+            logging.info(
+                "[Search] Retrieved %d docs in %.2f s",
+                len(results_list),
+                search_duration,
+            )
             
             retrieved_doc_ids = [str(doc["_id"]) for doc in results_list]
 
@@ -236,27 +299,40 @@ class ChatModel:
                  for msg in conversation_history[-max_messages:]]
             )
 
+            answer_language = self._resolve_answer_language(query_lang)
+
             filled_prompt = self.chat_template.format(
                 context=context,
                 conversation_history=formatted_history,
                 query=query,
+                answer_language=answer_language,
             )
 
             # 4. [메타데이터 전송] 검색된 문서 ID 등 정보를 먼저 보냄
             yield {
                 "type": "metadata",
                 "retrieved_doc_ids": retrieved_doc_ids,
-                "reference_count": len(results_list)
+                "reference_count": len(results_list),
+                "answer_language": answer_language,
             }
 
             # 5. [콘텐츠 전송] OpenAI 스트리밍 호출 (토큰 단위)
             # self.streaming_llm은 __init__에서 streaming=True로 설정됨
+            answer_start = time.perf_counter()
+            streamed_text = []
             for chunk in self.streaming_llm.stream(input=filled_prompt):
                 if chunk.content:
+                    streamed_text.append(chunk.content)
                     yield {
                         "type": "content",
                         "content": chunk.content
                     }
+            answer_duration = time.perf_counter() - answer_start
+            logging.info(
+                "[Answer] Streaming completed in %.2f s (chars=%d)",
+                answer_duration,
+                len("".join(streamed_text)),
+            )
 
             # 6. [완료 신호]
             yield {
@@ -266,3 +342,16 @@ class ChatModel:
         except Exception as e:
             logging.error(f"Error in generate_ai_response_stream: {str(e)}")
             raise e
+
+    def _resolve_answer_language(self, query_lang: Optional[str]) -> str:
+        """Normalize language codes/names for prompt injection."""
+        if not query_lang:
+            return "한국어"
+
+        normalized = str(query_lang).strip()
+        if not normalized:
+            return "한국어"
+
+        lowered = normalized.lower()
+        canonical = LANG_CODE_TO_NAME.get(lowered, lowered)
+        return LANG_NAME_TO_DISPLAY.get(canonical, normalized)

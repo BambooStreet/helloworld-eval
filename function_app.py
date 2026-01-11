@@ -2,9 +2,17 @@ import azure.functions as func
 import logging
 import sys, os
 import json
+import time
 from openai import OpenAI
 
 from utils import parse_mongo_query
+from translate_model import TranslateModel
+
+# Ensure INFO logs are emitted when running locally
+logger = logging.getLogger()
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO)
+logger.setLevel(logging.INFO)
 
 app = func.FunctionApp()
 
@@ -74,6 +82,7 @@ class ChatService:
         self.model = None
         self.collection = None
         self.client = None
+        self.translate_model = None
         self.initialize()
 
     def initialize(self):
@@ -108,6 +117,12 @@ class ChatService:
             logging.error(f"Failed to initialize ChatModel: {e}")
             raise
 
+        try:
+            self.translate_model = TranslateModel(self.config)
+        except Exception as e:
+            logging.error(f"Failed to initialize TranslateModel: {e}")
+            raise
+
         # Azure Application Settings에서 환경변수 직접 가져오기
         mongodb_uri = os.getenv("MONGODB_URI")
         openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -128,7 +143,13 @@ class ChatService:
             logging.error(f"Error loading database: {str(e)}")
             raise
 
-    def get_query_model_response_with_docs(self, conversation_history, query_text, mongo_query=None):
+    def get_query_model_response_with_docs(
+        self,
+        conversation_history,
+        query_text,
+        mongo_query=None,
+        query_lang=None,
+    ):
         """
         키워드 기반 하이브리드 검색 모델로부터 답변을 생성하고 검색된 문서들의 인덱스를 반환
         """
@@ -139,6 +160,7 @@ class ChatService:
                 query_text,
                 self.collection,
                 mongo_query=mongo_query,
+                query_lang=query_lang,
             )
             
             return {
@@ -156,7 +178,7 @@ class ChatService:
             }
 
     def stream_query_model_response_with_docs(
-        self, conversation_history, query_text, mongo_query=None
+        self, conversation_history, query_text, mongo_query=None, query_lang=None
     ):
         """스트리밍 응답을 생성하는 제너레이터."""
 
@@ -166,6 +188,7 @@ class ChatService:
                 query_text,
                 self.collection,
                 mongo_query=mongo_query,
+                query_lang=query_lang,
             )
         except Exception as exc:
             logging.error("Error during streaming response: %s", exc)
@@ -216,6 +239,14 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
         if conversation is None:
             conversation = []
 
+        logging.info(
+            "[question] Incoming conversation turns=%d, payload=%s",
+            len(conversation),
+            json.dumps(req_body, ensure_ascii=False),
+        )
+
+        processing_start = time.perf_counter()
+
         # 마지막으로 입력된 사용자 발화를 추출
         explicit_query = req_body.get("query")
         if explicit_query is None or str(explicit_query).strip() == "":
@@ -231,7 +262,36 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
                 return func.HttpResponse("No query provided", status_code=400)
             explicit_query = user_query
 
-        mongo_query = None
+        translate_start = time.perf_counter()
+        try:
+            translation_result = chat_service.translate_model.translate_query(
+                explicit_query
+            )
+        except Exception as exc:
+            logging.error("Translation failed: %s", exc)
+            return func.HttpResponse(
+                "Failed to process query",
+                status_code=500,
+            )
+
+        translated_query = translation_result["translated_query"]
+        query_lang = translation_result.get("query_lang")
+        mongo_query = translation_result.get("mongo_query") or []
+
+        translate_duration = time.perf_counter() - translate_start
+        logging.info(
+            "[Translate] Completed in %.2f s (lang=%s)",
+            translate_duration,
+            query_lang,
+        )
+
+        logging.info(
+            "[question] Translation result lang=%s translated=%s pipeline=%s",
+            query_lang,
+            translated_query,
+            json.dumps(mongo_query, ensure_ascii=False),
+        )
+
         if "mongo_query" in req_body:
             try:
                 mongo_query = parse_mongo_query(req_body.get("mongo_query"))
@@ -242,12 +302,23 @@ def question(req: func.HttpRequest) -> func.HttpResponse:
                     status_code=400,
                 )
 
-        effective_query = explicit_query
+        augmented_conversation = list(conversation)
+        augmented_conversation.append(
+            {"speaker": "human", "utterance": translated_query}
+        )
 
         # 응답 생성 (수정된 시그니처)
         response = chat_service.get_query_model_response_with_docs(
-            conversation, effective_query, mongo_query=mongo_query
+            augmented_conversation,
+            translated_query,
+            mongo_query=mongo_query,
+            query_lang=query_lang,
         )
+
+        elapsed_seconds = time.perf_counter() - processing_start
+
+        logging.info('[Answer] Final answer=%s', response["answer"])
+        logging.info('[Total] Request completed in %.2f s', elapsed_seconds)
 
         # 응답에서 references 제외하고 answer만 반환
         # 클라이언트에게 답변 텍스트만 전달 된다.
@@ -278,6 +349,14 @@ def question_stream(req: func.HttpRequest) -> func.HttpResponse:
     if conversation is None:
         conversation = []
 
+    logging.info(
+        "[question_stream] Incoming conversation turns=%d, payload=%s",
+        len(conversation),
+        json.dumps(req_body, ensure_ascii=False),
+    )
+
+    processing_start = time.perf_counter()
+
     explicit_query = req_body.get("query")
     if explicit_query is None or str(explicit_query).strip() == "":
         user_query = next(
@@ -292,7 +371,40 @@ def question_stream(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse("No query provided", status_code=400)
         explicit_query = user_query
 
-    mongo_query = None
+    try:
+        if not chat_service:
+            chat_service = ChatService()
+    except Exception as exc:
+        logging.exception("Failed to initialize chat service for streaming")
+        return func.HttpResponse(f"An error occurred: {exc}", status_code=500)
+
+    translate_start = time.perf_counter()
+    try:
+        translation_result = chat_service.translate_model.translate_query(
+            explicit_query
+        )
+    except Exception as exc:
+        logging.error("Translation failed: %s", exc)
+        return func.HttpResponse("Failed to process query", status_code=500)
+
+    translated_query = translation_result["translated_query"]
+    query_lang = translation_result.get("query_lang")
+    mongo_query = translation_result.get("mongo_query") or []
+
+    translate_duration = time.perf_counter() - translate_start
+    logging.info(
+        "[Translate] Completed in %.2f s (lang=%s)",
+        translate_duration,
+        query_lang,
+    )
+
+    logging.info(
+        "[question_stream] Translation result lang=%s translated=%s pipeline=%s",
+        query_lang,
+        translated_query,
+        json.dumps(mongo_query, ensure_ascii=False),
+    )
+
     if "mongo_query" in req_body:
         try:
             mongo_query = parse_mongo_query(req_body.get("mongo_query"))
@@ -303,24 +415,29 @@ def question_stream(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400,
             )
 
-    effective_query = explicit_query
-
-    try:
-        if not chat_service:
-            chat_service = ChatService()
-    except Exception as exc:
-        logging.exception("Failed to initialize chat service for streaming")
-        return func.HttpResponse(f"An error occurred: {exc}", status_code=500)
+    augmented_conversation = list(conversation)
+    augmented_conversation.append(
+        {"speaker": "human", "utterance": translated_query}
+    )
 
     def stream_response():
+        aggregated_answer = []
         try:
             streaming_generator = chat_service.stream_query_model_response_with_docs(
-                conversation,
-                effective_query,
+                augmented_conversation,
+                translated_query,
                 mongo_query=mongo_query,
+                query_lang=query_lang,
             )
 
             for chunk in streaming_generator:
+                if chunk.get("type") == "metadata":
+                    logging.info(
+                        "[question_stream] Streaming metadata=%s",
+                        json.dumps(chunk, ensure_ascii=False),
+                    )
+                elif chunk.get("type") == "content" and chunk.get("content"):
+                    aggregated_answer.append(chunk.get("content"))
                 payload = json.dumps(chunk, ensure_ascii=False)
                 yield f"data: {payload}\n\n"
         except Exception as exc:
@@ -330,6 +447,17 @@ def question_stream(req: func.HttpRequest) -> func.HttpResponse:
                 ensure_ascii=False,
             )
             yield f"data: {error_payload}\n\n"
+        finally:
+            elapsed_seconds = time.perf_counter() - processing_start
+            final_answer = "".join(aggregated_answer)
+            logging.info(
+                "[Answer] Final streamed answer=%s",
+                final_answer,
+            )
+            logging.info(
+                "[Total] Request completed in %.2f s",
+                elapsed_seconds,
+            )
 
     try:
         return func.HttpResponse(
