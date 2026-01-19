@@ -1,0 +1,45 @@
+[
+  {
+    "method": "GET",
+    "headers": {
+      "Authorization": "Bearer <YOUR_JWT_TOKEN>"
+    },
+    "params": {},
+    "expected_status": 200,
+    "description": "사용자의 최근 대화방 조회 (정상)"
+  },
+  {
+    "method": "GET",
+    "headers": {
+      "Authorization": "Bearer <YOUR_JWT_TOKEN_USER2>"
+    },
+    "params": {},
+    "expected_status": 200,
+    "description": "다른 사용자의 최근 대화방 조회"
+  },
+  {
+    "method": "GET",
+    "headers": {
+      "Authorization": "Bearer <NEW_USER_JWT_TOKEN>"
+    },
+    "params": {},
+    "expected_status": 200,
+    "description": "대화방이 없는 신규 사용자"
+  },
+  {
+    "method": "GET",
+    "headers": {},
+    "params": {},
+    "expected_status": 401,
+    "description": "Authorization 헤더 없음 (에러)"
+  },
+  {
+    "method": "GET",
+    "headers": {
+      "Authorization": "Bearer invalid_token"
+    },
+    "params": {},
+    "expected_status": 401,
+    "description": "잘못된 JWT 토큰 (에러)"
+  }
+]

@@ -1,0 +1,70 @@
+[
+  {
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer <YOUR_JWT_TOKEN>"
+    },
+    "params": {
+      "roomId": "room-001"
+    },
+    "body": {},
+    "expected_status": 200,
+    "description": "대화방 요약 생성 (정상)"
+  },
+  {
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer <YOUR_JWT_TOKEN>"
+    },
+    "params": {
+      "roomId": "room-002"
+    },
+    "body": {},
+    "expected_status": 200,
+    "description": "여러 대화가 있는 방 요약"
+  },
+  {
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer <YOUR_JWT_TOKEN>"
+    },
+    "params": {
+      "roomId": "nonexistent-room"
+    },
+    "body": {},
+    "expected_status": 200,
+    "description": "로그가 없는 대화방"
+  },
+  {
+    "method": "POST",
+    "headers": {},
+    "params": {
+      "roomId": "room-001"
+    },
+    "body": {},
+    "expected_status": 401,
+    "description": "Authorization 헤더 없음 (에러)"
+  },
+  {
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer <YOUR_JWT_TOKEN>"
+    },
+    "params": {},
+    "body": {},
+    "expected_status": 400,
+    "description": "roomId 파라미터 없음 (에러)"
+  },
+  {
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer <YOUR_JWT_TOKEN>"
+    },
+    "params": {
+      "roomId": ""
+    },
+    "body": {},
+    "expected_status": 400,
+    "description": "빈 roomId (에러)"
+  }
+]

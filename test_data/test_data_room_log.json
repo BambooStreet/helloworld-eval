@@ -1,0 +1,45 @@
+[
+  {
+    "method": "GET",
+    "headers": {},
+    "params": {
+      "roomId": "room-001"
+    },
+    "expected_status": 200,
+    "description": "대화방 로그 조회 (정상)"
+  },
+  {
+    "method": "GET",
+    "headers": {},
+    "params": {
+      "roomId": "room-002"
+    },
+    "expected_status": 200,
+    "description": "여러 메시지가 있는 대화방 조회"
+  },
+  {
+    "method": "GET",
+    "headers": {},
+    "params": {
+      "roomId": "nonexistent-room"
+    },
+    "expected_status": 200,
+    "description": "존재하지 않는 대화방 (빈 로그 반환)"
+  },
+  {
+    "method": "GET",
+    "headers": {},
+    "params": {},
+    "expected_status": 400,
+    "description": "roomId 파라미터 없음 (에러)"
+  },
+  {
+    "method": "GET",
+    "headers": {},
+    "params": {
+      "roomId": ""
+    },
+    "expected_status": 400,
+    "description": "빈 roomId (에러)"
+  }
+]

@@ -6,8 +6,10 @@ langchain-openai
 langchain-text-splitters
 openai
 pymongo
+motor
 pydantic
 tiktoken
 requests
 python-dateutil
 python-dotenv
+PyJWT

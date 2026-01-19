@@ -1,0 +1,40 @@
+[
+  {
+    "method": "GET",
+    "params": {
+      "param": "hello"
+    },
+    "expected_status": 200,
+    "description": "기본 테스트"
+  },
+  {
+    "method": "GET",
+    "params": {
+      "param": "안녕하세요"
+    },
+    "expected_status": 200,
+    "description": "한글 파라미터 테스트"
+  },
+  {
+    "method": "GET",
+    "params": {
+      "param": "Hello World! 테스트123"
+    },
+    "expected_status": 200,
+    "description": "특수문자 포함 테스트"
+  },
+  {
+    "method": "GET",
+    "params": {},
+    "expected_status": 400,
+    "description": "파라미터 없음 (에러)"
+  },
+  {
+    "method": "GET",
+    "params": {
+      "param": ""
+    },
+    "expected_status": 400,
+    "description": "빈 파라미터 (에러)"
+  }
+]
