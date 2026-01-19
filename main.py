@@ -154,28 +154,6 @@ async def get_chat_service():
     return _chat_service
 
 
-def extract_email_from_token(auth_header: str) -> str:
-    """
-    JWT 토큰에서 사용자 이메일을 추출합니다.
-
-    Parameters:
-        auth_header: Authorization 헤더 값 (Bearer <token> 형식)
-
-    Returns:
-        str: 사용자 이메일 (Gmail)
-    """
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-    else:
-        token = auth_header
-
-    import jwt
-
-    secret_key = os.getenv("JWT_SECRET_KEY")
-    decoded = jwt.decode(token, secret_key, algorithms=["HS256"])
-    return decoded.get("email") or decoded.get("gmail")
-
-
 def extract_user_id_from_token(auth_header: str) -> int:
     """
     JWT 토큰에서 사용자 ID를 추출합니다.
