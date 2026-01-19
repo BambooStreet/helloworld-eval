@@ -1,10 +1,11 @@
-azure-functions>=1.18.0
 langchain
 langchain-core
 langchain-mongodb
 langchain-openai
 langchain-text-splitters
 openai
+fastapi
+uvicorn
 pymongo
 motor
 pydantic
