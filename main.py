@@ -157,6 +157,10 @@ async def get_chat_service():
 def extract_user_id_from_token(auth_header: str) -> int:
     """
     JWT 토큰에서 사용자 ID를 추출합니다.
+    
+    Spring JWT Provider와 동일하게 작동:
+    1. secret key를 Base64로 인코딩
+    2. 토큰 검증 및 payload에서 'id' 필드 추출
 
     Parameters:
         auth_header: Authorization 헤더 값 (Bearer <token> 형식)
@@ -171,10 +175,14 @@ def extract_user_id_from_token(auth_header: str) -> int:
         token = auth_header
 
     import jwt
+    import base64
 
+    # Spring의 JwtTokenProvider와 동일하게 Base64 인코딩
     secret_key = os.getenv("JWT_SECRET_KEY")
-    decoded = jwt.decode(token, secret_key, algorithms=["HS256"])
-    return decoded.get("userId") or decoded.get("user_id")
+    encoded_secret = base64.b64encode(secret_key.encode()).decode()
+    
+    decoded = jwt.decode(token, encoded_secret, algorithms=["HS256"])
+    return decoded.get("id")
 
 
 def require_auth(func_handler):
@@ -535,139 +543,6 @@ class ChatService:
         except Exception as e:
             logging.error(f"Error fetching room logs: {e}")
             return {"roomId": room_id, "chatLogs": []}
-
-
-# 사용자 요청 수신
-@app.post("/api/question")
-@require_auth
-async def question(request: Request):
-    """
-    이 함수는 HTTP POST 요청을 통해 사용자의 대화 내용을 받고,
-    AI 응답을 생성하는 엔드포인트입니다.
-    """
-
-    logging.info("Question function triggered.")
-
-    user_id = request.state.user_id
-    _ = user_id
-
-    try:
-        chat_service = await get_chat_service()
-
-        req_body = await request.json()
-        conversation = req_body.get("Conversation", [])
-        if conversation is None:
-            conversation = []
-
-        logging.info(
-            "[question] Incoming conversation turns=%d, payload=%s",
-            len(conversation),
-            json.dumps(req_body, ensure_ascii=False),
-        )
-
-        processing_start = time.perf_counter()
-
-        explicit_query = req_body.get("query")
-        if explicit_query is None or str(explicit_query).strip() == "":
-            user_query = next(
-                (
-                    item["utterance"]
-                    for item in reversed(conversation)
-                    if item.get("speaker") == "human"
-                ),
-                None,
-            )
-            if not user_query:
-                return create_response(
-                    request,
-                    status_code=400,
-                    error="질문 내용이 제공되지 않았습니다.",
-                    details={"field": "query", "issue": "No query provided in conversation"},
-                )
-            explicit_query = user_query
-
-        translate_start = time.perf_counter()
-        try:
-            translation_result = chat_service.translate_model.translate_query(
-                explicit_query
-            )
-        except Exception as exc:
-            logging.error("Translation failed: %s", exc, exc_info=True)
-            return create_response(
-                request,
-                status_code=500,
-                error="질문 번역 처리에 실패했습니다.",
-                details={"errorType": type(exc).__name__, "errorMessage": str(exc)},
-            )
-
-        translated_query = translation_result["translated_query"]
-        query_lang = translation_result.get("query_lang")
-        mongo_query = translation_result.get("mongo_query") or []
-
-        translate_duration = time.perf_counter() - translate_start
-        logging.info("[Translate] Completed in %.2f s (lang=%s)", translate_duration, query_lang)
-
-        logging.info(
-            "[question] Translation result lang=%s translated=%s pipeline=%s",
-            query_lang,
-            translated_query,
-            json.dumps(mongo_query, ensure_ascii=False),
-        )
-
-        if "mongo_query" in req_body:
-            try:
-                mongo_query = parse_mongo_query(req_body.get("mongo_query"))
-            except Exception as exc:
-                logging.error("Invalid mongo_query provided: %s", exc, exc_info=True)
-                return create_response(
-                    request,
-                    status_code=400,
-                    error="잘못된 MongoDB 쿼리 형식입니다.",
-                    details={
-                        "field": "mongo_query",
-                        "errorType": type(exc).__name__,
-                        "errorMessage": str(exc),
-                    },
-                )
-
-        augmented_conversation = list(conversation)
-        augmented_conversation.append({"speaker": "human", "utterance": translated_query})
-
-        response = chat_service.get_query_model_response_with_docs(
-            augmented_conversation,
-            translated_query,
-            mongo_query=mongo_query,
-            query_lang=query_lang,
-        )
-
-        elapsed_seconds = time.perf_counter() - processing_start
-
-        logging.info("[Answer] Final answer=%s", response["answer"])
-        logging.info("[Total] Request completed in %.2f s", elapsed_seconds)
-
-        return create_response(
-            request,
-            status_code=200,
-            data={"answer": response["answer"]},
-        )
-
-    except ValueError as e:
-        logging.error(f"Invalid JSON format: {e}", exc_info=True)
-        return create_response(
-            request,
-            status_code=400,
-            error="잘못된 JSON 형식입니다.",
-            details={"errorType": "ValueError", "errorMessage": str(e)},
-        )
-    except Exception as e:
-        logging.exception("Question handler failed")
-        return create_response(
-            request,
-            status_code=500,
-            error="서버 내부 오류가 발생했습니다.",
-            details={"errorType": type(e).__name__, "errorMessage": str(e)},
-        )
-
 
 # question_stream -> chat/ask
 # 대화 기록 기반의 List[str] 입력받기
