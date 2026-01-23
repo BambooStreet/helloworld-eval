@@ -1262,6 +1262,57 @@ async def chat_recent_room(request: Request):
         )
 
 
+@app.get("/api/chat/rooms")
+@require_auth
+async def get_user_chat_rooms(request: Request):
+    """
+    사용자가 소유한 모든 채팅방 목록을 반환하는 엔드포인트
+    """
+    logging.info("Get user chat rooms function triggered.")
+
+    user_id = request.state.user_id
+
+    try:
+        chat_service = await get_chat_service()
+
+        # 사용자의 모든 채팅방 조회 (최신순 정렬)
+        cursor = chat_service.rooms_collection.find(
+            {"userId": user_id}
+        ).sort("updatedAt", -1)
+
+        rooms = await cursor.to_list(length=None)
+
+        room_list = []
+        for room in rooms:
+            room_list.append({
+                "roomId": str(room["_id"]),
+                "title": room.get("title", "제목 없음"),
+                "createdAt": room.get("createdAt").isoformat() if room.get("createdAt") else None,
+                "updatedAt": room.get("updatedAt").isoformat() if room.get("updatedAt") else None,
+            })
+
+        logging.info(f"Found {len(room_list)} rooms for user {user_id}")
+
+        return create_response(
+            request,
+            status_code=200,
+            data={
+                "userId": user_id,
+                "totalRooms": len(room_list),
+                "rooms": room_list,
+            },
+        )
+
+    except Exception as e:
+        logging.exception("Get user chat rooms handler failed")
+        return create_response(
+            request,
+            status_code=500,
+            error="채팅방 목록 조회 중 오류가 발생했습니다.",
+            details={"errorType": type(e).__name__, "errorMessage": str(e)},
+        )
+
+
 @app.delete("/api/chat/room")
 @require_auth
 async def delete_chat_room(request: Request):
