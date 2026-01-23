@@ -741,14 +741,21 @@ async def chat_ask(request: Request):
             logging.info("[Answer] Final streamed answer=%s", final_answer)
             logging.info("[Total] Request completed in %.2f s", elapsed_seconds)
 
+            # 동기 컨텍스트에서 비동기 태스크 실행
             try:
-                asyncio.create_task(
+                loop = asyncio.get_event_loop()
+                loop.create_task(
                     chat_service.save_chat_log(
                         user_id, room_id, explicit_query, final_answer
                     )
                 )
-            except Exception as log_error:
-                logging.error(f"Failed to save chat log: {log_error}")
+            except RuntimeError:
+                # 이벤트 루프가 없으면 새로 생성해서 실행
+                asyncio.run(
+                    chat_service.save_chat_log(
+                        user_id, room_id, explicit_query, final_answer
+                    )
+                )
 
     try:
         return StreamingResponse(
