@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from openai import AsyncOpenAI
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 from bson import ObjectId
 
 from utils import parse_mongo_query
@@ -157,17 +158,12 @@ async def get_chat_service():
 def extract_user_id_from_token(auth_header: str) -> int:
     """
     JWT 토큰에서 사용자 ID를 추출합니다.
-    
-    Spring JWT Provider와 호환:
-    - Spring JJWT의 setSigningKey(String)는 Base64 문자열을 받아 내부에서 디코딩
-    - 따라서 Python에서는 원본 secret key를 그대로 사용
 
     Parameters:
         auth_header: Authorization 헤더 값 (Bearer <token> 형식)
 
     Returns:
         int: 사용자 ID
-
     """
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
@@ -176,9 +172,9 @@ def extract_user_id_from_token(auth_header: str) -> int:
 
     import jwt
 
-    # Spring JJWT는 Base64 인코딩된 키를 내부에서 디코딩하므로
-    # Python에서는 원본 키를 그대로 사용
     secret_key = os.getenv("JWT_SECRET_KEY")
+    if not secret_key:
+        raise ValueError("JWT_SECRET_KEY environment variable is not set")
     
     decoded = jwt.decode(token, secret_key, algorithms=["HS256"])
     return decoded.get("id")
@@ -281,7 +277,9 @@ class ChatService:
     def __init__(self):
         self.model = None
         self.collection = None
+        self.collection_sync = None  # 동기 컬렉션 (스트리밍용)
         self.rag_client = None
+        self.rag_client_sync = None  # 동기 클라이언트 (스트리밍용)
         self.log_client = None
         self.translate_model = None
         self.config = None
@@ -351,8 +349,17 @@ class ChatService:
         logging.info("model and environment variables initialized")
 
         try:
-            # RAG 데이터베이스 (검색/지식) 클라이언트
+            # RAG 데이터베이스 (검색/지식) 클라이언트 - 비동기
             self.rag_client = AsyncIOMotorClient(
+                rag_mongodb_uri,
+                maxPoolSize=50,
+                minPoolSize=10,
+                maxIdleTimeMS=45000,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=10000,
+            )
+            # RAG 데이터베이스 - 동기 클라이언트 (스트리밍용)
+            self.rag_client_sync = MongoClient(
                 rag_mongodb_uri,
                 maxPoolSize=50,
                 minPoolSize=10,
@@ -372,9 +379,12 @@ class ChatService:
 
             logging.info("MongoDB async clients initialized (RAG + LOG)")
 
-            # RAG DB/컬렉션 설정
+            # RAG DB/컬렉션 설정 (비동기)
             self.rag_db = self.rag_client[self.db_name]
             self.collection = self.rag_db[self.collection_name]
+            # RAG DB/컬렉션 설정 (동기 - 스트리밍용)
+            rag_db_sync = self.rag_client_sync[self.db_name]
+            self.collection_sync = rag_db_sync[self.collection_name]
             # 로그 DB/컬렉션 설정
             self.log_db = self.log_client["chatdb"]
             self.chat_collection = self.log_db["chat"]
@@ -421,13 +431,13 @@ class ChatService:
     def stream_query_model_response_with_docs(
         self, conversation_history, query_text, mongo_query=None, query_lang=None
     ):
-        """스트리밍 응답을 생성하는 제너레이터."""
+        """스트리밍 응답을 생성하는 제너레이터. (동기 컬렉션 사용)"""
 
         try:
             yield from self.model.generate_ai_response_stream(
                 conversation_history,
                 query_text,
-                self.collection,
+                self.collection_sync,  # 동기 컬렉션 사용
                 mongo_query=mongo_query,
                 query_lang=query_lang,
             )
