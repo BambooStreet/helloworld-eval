@@ -574,6 +574,19 @@ async def chat_ask(request: Request):
             details={"field": "roomId", "issue": "Missing required parameter"},
         )
 
+    # roomId 유효성 검사 (MongoDB ObjectId 형식)
+    if not ObjectId.is_valid(room_id):
+        return create_response(
+            request,
+            status_code=400,
+            error="유효하지 않은 roomId 형식입니다.",
+            details={
+                "field": "roomId",
+                "value": room_id,
+                "issue": "roomId must be a 24-character hex string",
+            },
+        )
+
     try:
         req_body = await request.json()
     except ValueError as e:
