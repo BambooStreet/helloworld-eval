@@ -993,6 +993,87 @@ async def chat_recent_room(request: Request):
         )
 
 
+@app.delete("/api/chat/room")
+@require_auth
+async def delete_chat_room(request: Request):
+    """
+    채팅방과 해당 채팅 로그를 삭제하는 엔드포인트
+    """
+    logging.info("Delete chat room function triggered.")
+
+    user_id = request.state.user_id
+
+    room_id = request.query_params.get("roomId")
+    if not room_id:
+        return create_response(
+            request,
+            status_code=400,
+            error="roomId 파라미터가 필요합니다.",
+            details={"field": "roomId", "issue": "roomId parameter is required"},
+        )
+
+    # roomId 유효성 검사 (MongoDB ObjectId 형식)
+    if not ObjectId.is_valid(room_id):
+        return create_response(
+            request,
+            status_code=400,
+            error="유효하지 않은 roomId 형식입니다.",
+            details={
+                "field": "roomId",
+                "value": room_id,
+                "issue": "roomId must be a 24-character hex string",
+            },
+        )
+
+    try:
+        chat_service = await get_chat_service()
+
+        # 채팅방 존재 및 권한 확인
+        room = await chat_service.rooms_collection.find_one({"_id": ObjectId(room_id)})
+        if not room:
+            return create_response(
+                request,
+                status_code=404,
+                error="채팅방을 찾을 수 없습니다.",
+                details={"roomId": room_id, "issue": "Room not found"},
+            )
+
+        if room.get("userId") != user_id:
+            return create_response(
+                request,
+                status_code=403,
+                error="해당 채팅방에 대한 삭제 권한이 없습니다.",
+                details={"roomId": room_id, "issue": "Access denied"},
+            )
+
+        # 채팅 로그 삭제
+        chat_delete_result = await chat_service.chat_collection.delete_many({"roomId": room_id})
+        logging.info(f"Deleted {chat_delete_result.deleted_count} chat messages for room {room_id}")
+
+        # 채팅방 삭제
+        room_delete_result = await chat_service.rooms_collection.delete_one({"_id": ObjectId(room_id)})
+        logging.info(f"Deleted room {room_id}")
+
+        return create_response(
+            request,
+            status_code=200,
+            data={
+                "roomId": room_id,
+                "deletedMessages": chat_delete_result.deleted_count,
+                "message": "채팅방이 성공적으로 삭제되었습니다.",
+            },
+        )
+
+    except Exception as e:
+        logging.exception("Delete chat room handler failed")
+        return create_response(
+            request,
+            status_code=500,
+            error="채팅방 삭제 중 오류가 발생했습니다.",
+            details={"errorType": type(e).__name__, "errorMessage": str(e)},
+        )
+
+
 @app.post("/api/cv_generation")
 @require_auth
 async def cv_generation(request: Request):
