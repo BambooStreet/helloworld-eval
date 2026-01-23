@@ -281,12 +281,16 @@ class ChatService:
         self.rag_client = None
         self.rag_client_sync = None  # 동기 클라이언트 (스트리밍용)
         self.log_client = None
+        self.log_client_sync = None  # 동기 로그 클라이언트 (채팅 로그 저장용)
         self.translate_model = None
         self.config = None
         self.rag_db = None
         self.log_db = None
         self.chat_collection = None
         self.rooms_collection = None
+        # 동기 로그 컬렉션 (스트리밍 후 저장용)
+        self.chat_collection_sync = None
+        self.rooms_collection_sync = None
 
     async def initialize(self):
         """
@@ -367,8 +371,17 @@ class ChatService:
                 serverSelectionTimeoutMS=5000,
                 connectTimeoutMS=10000,
             )
-            # 로그/대화 데이터베이스 클라이언트
+            # 로그/대화 데이터베이스 클라이언트 - 비동기
             self.log_client = AsyncIOMotorClient(
+                log_mongodb_uri,
+                maxPoolSize=50,
+                minPoolSize=10,
+                maxIdleTimeMS=45000,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=10000,
+            )
+            # 로그/대화 데이터베이스 클라이언트 - 동기 (스트리밍 후 저장용)
+            self.log_client_sync = MongoClient(
                 log_mongodb_uri,
                 maxPoolSize=50,
                 minPoolSize=10,
@@ -385,10 +398,14 @@ class ChatService:
             # RAG DB/컬렉션 설정 (동기 - 스트리밍용)
             rag_db_sync = self.rag_client_sync[self.db_name]
             self.collection_sync = rag_db_sync[self.collection_name]
-            # 로그 DB/컬렉션 설정
+            # 로그 DB/컬렉션 설정 (비동기)
             self.log_db = self.log_client["chatdb"]
             self.chat_collection = self.log_db["chat"]
             self.rooms_collection = self.log_db["rooms"]
+            # 로그 DB/컬렉션 설정 (동기 - 스트리밍 후 저장용)
+            log_db_sync = self.log_client_sync["chatdb"]
+            self.chat_collection_sync = log_db_sync["chat"]
+            self.rooms_collection_sync = log_db_sync["rooms"]
 
             logging.info("databases initialized successfully")
         except Exception as e:
@@ -492,6 +509,49 @@ class ChatService:
             logging.info(f"Chat log saved for room {room_id}")
         except Exception as e:
             logging.error(f"Error saving chat log: {e}")
+
+    def save_chat_log_sync(self, user_id: int, room_id: str, question: str, answer: str):
+        """
+        채팅 로그를 데이터베이스에 저장합니다. (동기 - 스트리밍 후 저장용)
+
+        Parameters:
+            user_id: 사용자 ID
+            room_id: 대화방 ID
+            question: 사용자 질문
+            answer: AI 답변
+        """
+        try:
+            # 사용자 메시지 저장
+            self.chat_collection_sync.insert_one(
+                {
+                    "roomId": room_id,
+                    "sender": "user",
+                    "content": question,
+                    "time": datetime.utcnow(),
+                    "_class": "Helloworld.helloworld_webflux.domain.ChatMessage",
+                }
+            )
+
+            # AI 응답 저장
+            self.chat_collection_sync.insert_one(
+                {
+                    "roomId": room_id,
+                    "sender": "bot",
+                    "content": answer,
+                    "time": datetime.utcnow(),
+                    "_class": "Helloworld.helloworld_webflux.domain.ChatMessage",
+                }
+            )
+
+            # rooms 컬렉션 updatedAt 업데이트
+            self.rooms_collection_sync.update_one(
+                {"_id": ObjectId(room_id)},
+                {"$set": {"updatedAt": datetime.utcnow()}},
+            )
+
+            logging.info(f"Chat log saved (sync) for room {room_id}")
+        except Exception as e:
+            logging.error(f"Error saving chat log (sync): {e}")
 
     async def get_recent_room_and_logs(self, user_id: int):
         """
@@ -741,21 +801,13 @@ async def chat_ask(request: Request):
             logging.info("[Answer] Final streamed answer=%s", final_answer)
             logging.info("[Total] Request completed in %.2f s", elapsed_seconds)
 
-            # 동기 컨텍스트에서 비동기 태스크 실행
+            # 동기 메서드로 채팅 로그 저장 (이벤트 루프 충돌 방지)
             try:
-                loop = asyncio.get_event_loop()
-                loop.create_task(
-                    chat_service.save_chat_log(
-                        user_id, room_id, explicit_query, final_answer
-                    )
+                chat_service.save_chat_log_sync(
+                    user_id, room_id, explicit_query, final_answer
                 )
-            except RuntimeError:
-                # 이벤트 루프가 없으면 새로 생성해서 실행
-                asyncio.run(
-                    chat_service.save_chat_log(
-                        user_id, room_id, explicit_query, final_answer
-                    )
-                )
+            except Exception as log_error:
+                logging.error(f"Failed to save chat log: {log_error}")
 
     try:
         return StreamingResponse(
