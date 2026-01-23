@@ -11,17 +11,13 @@ Azure CI/CD 배포용
 - [로컬 테스트 가이드](#로컬-테스트-가이드)
 - [API 엔드포인트 명세](#api-엔드포인트-명세)
   - [1. 테스트 엔드포인트 (GET /api/get_echo_call)](#1-테스트-엔드포인트-get-apiget_echo_call)
-  - [2. 질문 엔드포인트 (POST /api/question)](#2-질문-엔드포인트-post-apiquestion)
-  - [3. 채팅 스트리밍 엔드포인트 (POST /api/chat/ask)](#3-채팅-스트리밍-엔드포인트-post-apichatask)
-  - [4. 대화 요약 엔드포인트 (POST /api/summary)](#4-대화-요약-엔드포인트-post-apisummary)
-  - [5. 대화방 로그 조회 (GET /api/chat/room-log)](#5-대화방-로그-조회-get-apichatroom-log)
-  - [6. 최근 대화방 조회 (GET /api/chat/recent-room)](#6-최근-대화방-조회-get-apichatrecent-room)
-  - [7. 채팅방 생성 (POST /api/chat/create-room)](#7-채팅방-생성-post-apichatcreate-room)
-  - [8. 채팅방 목록 조회 (GET /api/chat/user-rooms)](#8-채팅방-목록-조회-get-apichatuser-rooms)
-  - [9. 상담 요약 목록 조회 (GET /api/chat/user-summaries)](#9-상담-요약-목록-조회-get-apichatuser-summaries)
-  - [10. 전체 채팅방 삭제 (DELETE /api/chat/user-rooms)](#10-전체-채팅방-삭제-delete-apichatuser-rooms)
-  - [11. 단일 채팅방 삭제 (DELETE /api/chat/room)](#11-단일-채팅방-삭제-delete-apichatroom)
-  - [12. 이력서 생성 엔드포인트 (POST /api/cv_generation)](#12-이력서-생성-엔드포인트-post-apicv_generation)
+  - [2. 채팅 스트리밍 엔드포인트 (POST /api/chat/ask)](#2-채팅-스트리밍-엔드포인트-post-apichatask)
+  - [3. 대화 요약 엔드포인트 (POST /api/summary)](#3-대화-요약-엔드포인트-post-apisummary)
+  - [4. 대화방 로그 조회 (GET /api/chat/room-log)](#4-대화방-로그-조회-get-apichatroom-log)
+  - [5. 최근 대화방 조회 (GET /api/chat/recent-room)](#5-최근-대화방-조회-get-apichatrecent-room)
+  - [6. 채팅방 목록 조회 (GET /api/chat/rooms)](#6-채팅방-목록-조회-get-apichatrooms)
+  - [7. 채팅방 삭제 (DELETE /api/chat/room)](#7-채팅방-삭제-delete-apichatroom)
+  - [8. 이력서 생성 엔드포인트 (POST /api/cv_generation)](#8-이력서-생성-엔드포인트-post-apicv_generation)
 - [빠른 테스트 체크리스트](#빠른-테스트-체크리스트)
 - [문제 해결 가이드](#문제-해결-가이드)
 
@@ -97,7 +93,8 @@ Functions:
 
 ### 요청 설정
 - **Method**: `GET`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/get_echo_call?param=hello`
+- **URL**: `/api/get_echo_call?param=hello`
+- **인증**: 불필요
 - **Query Parameters**:
   - `param` (필수): 테스트할 문자열
 
@@ -122,64 +119,20 @@ GET /api/get_echo_call?param=hello
 
 ---
 
-## 2. 질문 엔드포인트 (POST /api/question)
-
-### 역할
-사용자의 대화 히스토리와 질문을 받아 RAG(Retrieval-Augmented Generation) 기반으로 답변을 생성합니다. MongoDB에서 관련 문서를 검색하고 GPT 모델로 응답합니다.
-
-### 요청 설정
-- **Method**: `POST`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/question`
-- **Headers**:
-  - `Content-Type: application/json`
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
-
-### Request Body
-```json
-{
-    "Conversation": [
-        {"speaker": "human", "utterance": "E-7 비자가 뭔가요?"},
-        {"speaker": "ai", "utterance": "E-7 비자는 전문 인력을 위한 취업 비자입니다."}
-    ],
-    "query": "신청 방법을 알려주세요",
-    "mongo_query": []
-}
-```
-
-**필드 설명**:
-- `Conversation` (선택): 이전 대화 기록 배열
-- `query` (필수): 현재 사용자 질문 (원문 언어)
-- `mongo_query` (선택): MongoDB 검색 파이프라인 (미지정 시 자동 생성)
-
-### 예상 응답 (200 OK)
-```json
-{
-    "timestamp": "2026-01-19T12:34:56.789Z",
-    "path": "/api/question",
-    "status": 200,
-    "error": "OK",
-    "requestId": "abc-123-def-456",
-    "data": {
-        "answer": "E-7 비자 신청은 다음 단계를 따르세요: 1) 체류자격 확인..."
-    }
-}
-```
-
----
-
-## 3. 채팅 스트리밍 엔드포인트 (POST /api/chat/ask)
+## 2. 채팅 스트리밍 엔드포인트 (POST /api/chat/ask)
 
 ### 역할
 실시간 SSE(Server-Sent Events) 스트리밍으로 AI 응답을 제공합니다. MongoDB에서 대화방 히스토리를 자동으로 로드하고, 현재 질문과 결합하여 답변을 생성합니다. 응답 완료 후 대화 로그가 자동 저장되며, 첫 번째 대화 저장 시 `roomTitle`이 자동 생성됩니다.
 
 ### 요청 설정
 - **Method**: `POST`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/chat/ask?roomId=<ROOM_ID>`
+- **URL**: `/api/chat/ask?roomId=<ROOM_ID>`
+- **인증**: 필수 (`Authorization: Bearer <JWT_TOKEN>`)
 - **Headers**:
   - `Content-Type: application/json`
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
+  - `Authorization: Bearer <JWT_TOKEN>`
 - **Query Parameters**:
-  - `roomId` (필수): 대화방 ID
+  - `roomId` (필수): 대화방 ID (24자리 MongoDB ObjectId)
 
 ### Request Body
 ```json
@@ -209,16 +162,17 @@ data: {"type":"content","content":" 비자"}
 
 ---
 
-## 4. 대화 요약 엔드포인트 (POST /api/summary)
+## 3. 대화 요약 엔드포인트 (POST /api/summary)
 
 ### 역할
 특정 대화방의 전체 대화 내용을 요약합니다. 생성된 요약문은 응답으로 반환됨과 동시에 `rooms` 컬렉션의 `roomSummary` 필드에 저장됩니다. 이후 `/api/chat/user-summaries` 조회 시 별도 생성 없이 바로 반환됩니다.
 
 ### 요청 설정
 - **Method**: `POST`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/summary?roomId=<ROOM_ID>`
+- **URL**: `/api/summary?roomId=<ROOM_ID>`
+- **인증**: 필수 (`Authorization: Bearer <JWT_TOKEN>`)
 - **Headers**:
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
+  - `Authorization: Bearer <JWT_TOKEN>`
 - **Query Parameters**:
   - `roomId` (필수): 대화방 ID
 
@@ -241,16 +195,17 @@ data: {"type":"content","content":" 비자"}
 
 ---
 
-## 5. 대화방 로그 조회 (GET /api/chat/room-log)
+## 4. 대화방 로그 조회 (GET /api/chat/room-log)
 
 ### 역할
 특정 대화방의 전체 대화 로그를 시간순으로 반환합니다. 권한 검증이 포함되어 있어 해당 사용자의 대화방만 조회 가능합니다. `roomTitle`도 함께 반환됩니다.
 
 ### 요청 설정
 - **Method**: `GET`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/chat/room-log?roomId=<ROOM_ID>`
+- **URL**: `/api/chat/room-log?roomId=<ROOM_ID>`
+- **인증**: 필수 (`Authorization: Bearer <JWT_TOKEN>`)
 - **Headers**:
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
+  - `Authorization: Bearer <JWT_TOKEN>`
 - **Query Parameters**:
   - `roomId` (필수): 대화방 ID
 
@@ -275,16 +230,17 @@ data: {"type":"content","content":" 비자"}
 
 ---
 
-## 6. 최근 대화방 조회 (GET /api/chat/recent-room)
+## 5. 최근 대화방 조회 (GET /api/chat/recent-room)
 
 ### 역할
 사용자의 가장 최근에 업데이트된 대화방과 해당 대화 로그를 반환합니다. `roomTitle`도 함께 반환됩니다.
 
 ### 요청 설정
 - **Method**: `GET`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/chat/recent-room`
+- **URL**: `/api/chat/recent-room`
+- **인증**: 필수 (`Authorization: Bearer <JWT_TOKEN>`)
 - **Headers**:
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
+  - `Authorization: Bearer <JWT_TOKEN>`
 
 ### 예상 응답 (200 OK)
 ```json
@@ -307,192 +263,117 @@ data: {"type":"content","content":" 비자"}
 
 ---
 
-## 7. 채팅방 생성 (POST /api/chat/create-room)
+## 6. 채팅방 목록 조회 (GET /api/chat/rooms)
 
 ### 역할
-새로운 채팅방을 생성하고 `roomId`를 반환합니다. 채팅 시작 전 반드시 먼저 호출해야 합니다.
-
-### 요청 설정
-- **Method**: `POST`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/chat/create-room`
-- **Headers**:
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
-
-### Request Body
-없음
-
-### 예상 응답 (201 Created)
-```json
-{
-    "timestamp": "2026-01-19T12:34:56.789Z",
-    "path": "/api/chat/create-room",
-    "status": 201,
-    "error": "OK",
-    "requestId": "abc-123-def-456",
-    "data": {
-        "roomId": "664abc123def456789012345"
-    }
-}
-```
-
----
-
-## 8. 채팅방 목록 조회 (GET /api/chat/user-rooms)
-
-### 역할
-사용자의 모든 채팅방 목록을 `updatedAt` 내림차순으로 반환합니다. 각 채팅방의 `roomTitle`이 포함됩니다.
+JWT 토큰을 가진 사용자가 소유한 모든 채팅방의 제목 및 roomId 목록을 반환합니다. 최신 업데이트 순으로 정렬됩니다.
 
 ### 요청 설정
 - **Method**: `GET`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/chat/user-rooms`
+- **URL**: `/api/chat/rooms`
+- **인증**: 필수 (`Authorization: Bearer <JWT_TOKEN>`)
 - **Headers**:
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
+  - `Authorization: Bearer <JWT_TOKEN>`
 
 ### 예상 응답 (200 OK)
 ```json
 {
-    "timestamp": "2026-01-19T12:34:56.789Z",
-    "path": "/api/chat/user-rooms",
+    "timestamp": "2026-01-23T12:34:56.789Z",
+    "path": "/api/chat/rooms",
     "status": 200,
     "error": "OK",
     "requestId": "abc-123-def-456",
     "data": {
+        "userId": 1,
+        "totalRooms": 3,
         "rooms": [
             {
-                "roomId": "664abc123def456789012345",
-                "roomTitle": "E-7 비자 신청 절차 문의",
-                "createdAt": "2026-03-01T09:00:00.000Z",
-                "updatedAt": "2026-03-03T10:30:00.000Z"
+                "roomId": "679234abc123def456789012",
+                "title": "취업 상담",
+                "createdAt": "2026-01-20T10:30:00",
+                "updatedAt": "2026-01-23T15:20:00"
             },
             {
-                "roomId": "664def456abc789012345678",
-                "roomTitle": null,
-                "createdAt": "2026-02-28T14:00:00.000Z",
-                "updatedAt": "2026-02-28T14:00:00.000Z"
+                "roomId": "678abc123def456789012345",
+                "title": "이력서 작성",
+                "createdAt": "2026-01-18T09:00:00",
+                "updatedAt": "2026-01-18T11:30:00"
+            },
+            {
+                "roomId": "677def456789012345abc678",
+                "title": "제목 없음",
+                "createdAt": "2026-01-15T14:00:00",
+                "updatedAt": "2026-01-15T14:30:00"
             }
         ]
     }
 }
 ```
 
-> `roomTitle`이 `null`인 경우는 아직 대화가 시작되지 않은 채팅방입니다.
+**응답 필드 설명**:
+- `userId`: 사용자 ID
+- `totalRooms`: 총 채팅방 개수
+- `rooms`: 채팅방 목록 배열
+  - `roomId`: 채팅방 고유 ID
+  - `title`: 채팅방 제목 (없으면 "제목 없음")
+  - `createdAt`: 생성 시간
+  - `updatedAt`: 마지막 업데이트 시간
 
 ---
 
-## 9. 상담 요약 목록 조회 (GET /api/chat/user-summaries)
+## 7. 채팅방 삭제 (DELETE /api/chat/room)
 
 ### 역할
-마이페이지용 엔드포인트입니다. 사용자의 모든 채팅방에 대해 `roomTitle`과 `roomSummary`를 `updatedAt` 내림차순으로 반환합니다. `roomSummary`는 `/api/summary`가 호출된 방에만 존재하며, 그렇지 않은 방은 `null`로 반환됩니다.
-
-### 요청 설정
-- **Method**: `GET`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/chat/user-summaries`
-- **Headers**:
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
-
-### 예상 응답 (200 OK)
-```json
-{
-    "timestamp": "2026-01-19T12:34:56.789Z",
-    "path": "/api/chat/user-summaries",
-    "status": 200,
-    "error": "OK",
-    "requestId": "abc-123-def-456",
-    "data": {
-        "summaries": [
-            {
-                "roomId": "664abc123def456789012345",
-                "roomTitle": "E-7 비자 신청 절차 문의",
-                "roomSummary": "E-7 비자 신청 요건, 필요 서류, 처리 기간에 대해 상담함. 고용주 추천서와 학위증명서 준비 필요.",
-                "updatedAt": "2026-03-03T10:30:00.000Z"
-            },
-            {
-                "roomId": "664def456abc789012345678",
-                "roomTitle": "퇴직금 계산 방법",
-                "roomSummary": null,
-                "updatedAt": "2026-03-01T08:00:00.000Z"
-            }
-        ]
-    }
-}
-```
-
-### 활용 패턴
-1. 마이페이지 진입 시 `GET /api/chat/user-summaries` 호출
-2. `roomSummary`가 `null`인 항목은 `POST /api/summary?roomId=<id>` 호출로 요약 생성 (생성 후 자동 저장됨)
-3. 이후 재조회 시 저장된 요약문 바로 반환
-
----
-
-## 10. 전체 채팅방 삭제 (DELETE /api/chat/user-rooms)
-
-### 역할
-사용자의 모든 채팅방과 해당 채팅 로그를 일괄 삭제합니다.
+특정 채팅방과 해당 채팅방의 모든 대화 로그를 삭제합니다. 본인 소유의 채팅방만 삭제 가능합니다.
 
 ### 요청 설정
 - **Method**: `DELETE`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/chat/user-rooms`
+- **URL**: `/api/chat/room?roomId=<ROOM_ID>`
+- **인증**: 필수 (`Authorization: Bearer <JWT_TOKEN>`)
 - **Headers**:
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
-
-### 예상 응답 (200 OK)
-```json
-{
-    "timestamp": "2026-01-19T12:34:56.789Z",
-    "path": "/api/chat/user-rooms",
-    "status": 200,
-    "error": "OK",
-    "requestId": "abc-123-def-456",
-    "data": {
-        "deletedRooms": 3,
-        "deletedMessages": 24
-    }
-}
-```
-
----
-
-## 11. 단일 채팅방 삭제 (DELETE /api/chat/room)
-
-### 역할
-특정 채팅방과 해당 채팅 로그를 삭제합니다.
-
-### 요청 설정
-- **Method**: `DELETE`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/chat/room?roomId=<ROOM_ID>`
-- **Headers**:
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
+  - `Authorization: Bearer <JWT_TOKEN>`
 - **Query Parameters**:
-  - `roomId` (필수): 삭제할 대화방 ID
+  - `roomId` (필수): 삭제할 대화방 ID (24자리 MongoDB ObjectId)
 
 ### 예상 응답 (200 OK)
 ```json
 {
-    "timestamp": "2026-01-19T12:34:56.789Z",
-    "path": "/api/chat/room?roomId=abc123",
+    "timestamp": "2026-01-23T12:34:56.789Z",
+    "path": "/api/chat/room?roomId=679234abc123def456789012",
     "status": 200,
     "error": "OK",
     "requestId": "abc-123-def-456",
     "data": {
-        "deletedRooms": 1,
-        "deletedMessages": 8
+        "roomId": "679234abc123def456789012",
+        "deletedMessages": 15,
+        "message": "채팅방이 성공적으로 삭제되었습니다."
     }
 }
 ```
 
+**응답 필드 설명**:
+- `roomId`: 삭제된 채팅방 ID
+- `deletedMessages`: 함께 삭제된 채팅 메시지 개수
+- `message`: 성공 메시지
+
+### 에러 응답
+- **404 Not Found**: 채팅방을 찾을 수 없음
+- **403 Forbidden**: 삭제 권한 없음 (다른 사용자의 채팅방)
+
 ---
 
-## 12. 이력서 생성 엔드포인트 (POST /api/cv_generation)
+## 8. 이력서 생성 엔드포인트 (POST /api/cv_generation)
 
 ### 역할
 외국인 근로자의 정보를 입력받아 GPT 기반으로 한국어 이력서(자기소개서)를 자동 생성합니다.
 
 ### 요청 설정
 - **Method**: `POST`
-- **URL**: `http://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/cv_generation`
+- **URL**: `/api/cv_generation`
+- **인증**: 필수 (`Authorization: Bearer <JWT_TOKEN>`)
 - **Headers**:
   - `Content-Type: application/json`
-  - `Authorization: Bearer <JWT_TOKEN>` (필수)
+  - `Authorization: Bearer <JWT_TOKEN>`
 
 ### Request Body
 ```json
@@ -554,14 +435,7 @@ GET /api/get_echo_call?param=hello
 → 200 OK 응답 확인
 ```
 
-### ✅ 2단계: 채팅방 생성 (인증 필요)
-```
-POST /api/chat/create-room
-Headers: Authorization: Bearer <JWT_TOKEN>
-→ 201 Created + roomId 필드 확인 후 이후 단계에 사용
-```
-
-### ✅ 3단계: 채팅 스트리밍 확인 (인증 필요)
+### ✅ 2단계: 채팅 스트리밍 확인 (인증 필요)
 ```
 POST /api/chat/ask?roomId=<ROOM_ID>
 Headers: Authorization: Bearer <JWT_TOKEN>
@@ -570,14 +444,7 @@ Body: {"query": "E-7 비자 신청 방법이 뭔가요?"}
 → 완료 후 roomTitle 자동 생성 여부 확인 (user-rooms 조회)
 ```
 
-### ✅ 4단계: 채팅방 목록 조회 (인증 필요)
-```
-GET /api/chat/user-rooms
-Headers: Authorization: Bearer <JWT_TOKEN>
-→ 200 OK + rooms 배열, 각 항목에 roomTitle 포함 확인
-```
-
-### ✅ 5단계: 대화 요약 생성 (인증 필요)
+### ✅ 3단계: 대화 요약 확인 (인증 필요)
 ```
 POST /api/summary?roomId=<ROOM_ID>
 Headers: Authorization: Bearer <JWT_TOKEN>
@@ -592,29 +459,35 @@ Headers: Authorization: Bearer <JWT_TOKEN>
 → 200 OK + summaries 배열, roomTitle / roomSummary 필드 확인
 ```
 
-### ✅ 7단계: 대화방 로그 조회 (인증 필요)
+### ✅ 4단계: 대화방 로그 조회 (인증 필요)
 ```
 GET /api/chat/room-log?roomId=<ROOM_ID>
 Headers: Authorization: Bearer <JWT_TOKEN>
 → 200 OK + roomId, roomTitle, chatLogs 필드 확인
 ```
 
-### ✅ 8단계: 최근 대화방 조회 (인증 필요)
+### ✅ 5단계: 최근 대화방 조회 (인증 필요)
 ```
 GET /api/chat/recent-room
 Headers: Authorization: Bearer <JWT_TOKEN>
 → 200 OK + roomId, roomTitle, chatLogs 필드 확인
 ```
 
-### ✅ 9단계: 질문 기능 확인 (인증 필요, 레거시)
+### ✅ 6단계: 채팅방 목록 조회 (인증 필요)
 ```
-POST /api/question
+GET /api/chat/rooms
 Headers: Authorization: Bearer <JWT_TOKEN>
-Body: {"Conversation": [{"speaker": "human", "utterance": "안녕하세요"}], "query": "E-7 비자란?"}
-→ 200 OK + answer 필드 확인
+→ 200 OK + userId, totalRooms, rooms 배열 확인
 ```
 
-### ✅ 10단계: 이력서 생성 확인 (인증 필요)
+### ✅ 7단계: 채팅방 삭제 (인증 필요)
+```
+DELETE /api/chat/room?roomId=<ROOM_ID>
+Headers: Authorization: Bearer <JWT_TOKEN>
+→ 200 OK + roomId, deletedMessages 필드 확인
+```
+
+### ✅ 8단계: 이력서 생성 확인 (인증 필요)
 ```
 POST /api/cv_generation
 Headers: Authorization: Bearer <JWT_TOKEN>
@@ -632,19 +505,19 @@ Body: 완전한 이력서 데이터 (위 명세 참조)
 - JWT_SECRET_KEY 환경 변수 설정 확인
 
 ### 403 Forbidden
-- 대화방 접근 권한 확인 (본인 대화방만 조회 가능)
+- 대화방 접근 권한 확인 (본인 대화방만 조회/삭제 가능)
 - roomId와 사용자 매칭 확인
 
 ### 404 Not Found
 - URL 경로 확인 (`/api/` 접두사 필수)
 - Method 확인 (GET/POST/DELETE)
-- 엔드포인트 이름 확인 (`get_echo_call`, `chat/ask` 등)
+- 엔드포인트 이름 확인 (`get_echo_call`, `chat/ask`, `chat/rooms` 등)
+- 채팅방 삭제 시: 존재하지 않는 roomId
 
 ### 400 Bad Request
 - Content-Type 헤더 확인 (`application/json`)
 - JSON 형식 유효성 검사
 - 필수 필드 포함 여부 확인
-  - `/api/question`: `query` 필드
   - `/api/chat/ask`: `query` 필드, `roomId` 파라미터
   - `/api/summary`: `roomId` 파라미터
   - `/api/chat/room-log`: `roomId` 파라미터
@@ -665,3 +538,18 @@ Body: 완전한 이력서 데이터 (위 명세 참조)
 - 클라이언트가 SSE를 지원하는지 확인
 - `text/event-stream` MIME 타입 처리 확인
 - 네트워크 타임아웃 설정 확인
+
+---
+
+## API 엔드포인트 요약표
+
+| # | Method | Endpoint | 인증 | 필수 파라미터 | 설명 |
+|---|--------|----------|------|---------------|------|
+| 1 | GET | `/api/get_echo_call` | ❌ | `param` (query) | 테스트 에코 |
+| 2 | POST | `/api/chat/ask` | ✅ | `roomId` (query), `query` (body) | 채팅 스트리밍 |
+| 3 | POST | `/api/summary` | ✅ | `roomId` (query) | 대화 요약 |
+| 4 | GET | `/api/chat/room-log` | ✅ | `roomId` (query) | 대화방 로그 |
+| 5 | GET | `/api/chat/recent-room` | ✅ | - | 최근 대화방 |
+| 6 | GET | `/api/chat/rooms` | ✅ | - | 채팅방 목록 |
+| 7 | DELETE | `/api/chat/room` | ✅ | `roomId` (query) | 채팅방 삭제 |
+| 8 | POST | `/api/cv_generation` | ✅ | `personal`, `experience`, `language` (body) | 이력서 생성 |
