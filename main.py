@@ -158,9 +158,9 @@ def extract_user_id_from_token(auth_header: str) -> int:
     """
     JWT 토큰에서 사용자 ID를 추출합니다.
     
-    Spring JWT Provider와 동일하게 작동:
-    1. secret key를 Base64로 인코딩
-    2. 토큰 검증 및 payload에서 'id' 필드 추출
+    Spring JWT Provider와 호환:
+    - Spring JJWT의 setSigningKey(String)는 Base64 문자열을 받아 내부에서 디코딩
+    - 따라서 Python에서는 원본 secret key를 그대로 사용
 
     Parameters:
         auth_header: Authorization 헤더 값 (Bearer <token> 형식)
@@ -175,13 +175,12 @@ def extract_user_id_from_token(auth_header: str) -> int:
         token = auth_header
 
     import jwt
-    import base64
 
-    # Spring의 JwtTokenProvider와 동일하게 Base64 인코딩
+    # Spring JJWT는 Base64 인코딩된 키를 내부에서 디코딩하므로
+    # Python에서는 원본 키를 그대로 사용
     secret_key = os.getenv("JWT_SECRET_KEY")
-    encoded_secret = base64.b64encode(secret_key.encode()).decode()
     
-    decoded = jwt.decode(token, encoded_secret, algorithms=["HS256"])
+    decoded = jwt.decode(token, secret_key, algorithms=["HS256"])
     return decoded.get("id")
 
 
