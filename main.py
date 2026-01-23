@@ -887,6 +887,17 @@ async def summary(request: Request):
             )
         )
 
+        # OpenAI 토큰 사용량 로깅
+        if response.usage:
+            logging.info(
+                "[OpenAI Usage] endpoint=summary, model=%s, prompt_tokens=%d, "
+                "completion_tokens=%d, total_tokens=%d",
+                response.model,
+                response.usage.prompt_tokens,
+                response.usage.completion_tokens,
+                response.usage.total_tokens,
+            )
+
         summary_text = response.choices[0].message.content.strip()
 
         return create_response(
@@ -1060,6 +1071,18 @@ async def cv_generation(request: Request):
         ]
 
         response = llm.invoke(input=messages)
+
+        # OpenAI 토큰 사용량 로깅 (LangChain)
+        if hasattr(response, 'response_metadata') and response.response_metadata:
+            token_usage = response.response_metadata.get('token_usage', {})
+            logging.info(
+                "[OpenAI Usage] endpoint=cv_generation, model=%s, prompt_tokens=%d, "
+                "completion_tokens=%d, total_tokens=%d",
+                response.response_metadata.get('model_name', 'gpt-4o-mini'),
+                token_usage.get('prompt_tokens', 0),
+                token_usage.get('completion_tokens', 0),
+                token_usage.get('total_tokens', 0),
+            )
 
         content = response.content
         intro_start = content.find("<자기소개문장>") + len("<자기소개문장>")
