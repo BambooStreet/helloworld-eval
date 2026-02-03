@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from openai import AsyncOpenAI
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 from bson import ObjectId
 
 from utils import parse_mongo_query
@@ -163,7 +164,6 @@ def extract_user_id_from_token(auth_header: str) -> int:
 
     Returns:
         int: 사용자 ID
-
     """
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
@@ -173,8 +173,11 @@ def extract_user_id_from_token(auth_header: str) -> int:
     import jwt
 
     secret_key = os.getenv("JWT_SECRET_KEY")
+    if not secret_key:
+        raise ValueError("JWT_SECRET_KEY environment variable is not set")
+    
     decoded = jwt.decode(token, secret_key, algorithms=["HS256"])
-    return decoded.get("userId") or decoded.get("user_id")
+    return decoded.get("id")
 
 
 def require_auth(func_handler):
@@ -274,14 +277,20 @@ class ChatService:
     def __init__(self):
         self.model = None
         self.collection = None
+        self.collection_sync = None  # 동기 컬렉션 (스트리밍용)
         self.rag_client = None
+        self.rag_client_sync = None  # 동기 클라이언트 (스트리밍용)
         self.log_client = None
+        self.log_client_sync = None  # 동기 로그 클라이언트 (채팅 로그 저장용)
         self.translate_model = None
         self.config = None
         self.rag_db = None
         self.log_db = None
         self.chat_collection = None
         self.rooms_collection = None
+        # 동기 로그 컬렉션 (스트리밍 후 저장용)
+        self.chat_collection_sync = None
+        self.rooms_collection_sync = None
 
     async def initialize(self):
         """
@@ -344,7 +353,7 @@ class ChatService:
         logging.info("model and environment variables initialized")
 
         try:
-            # RAG 데이터베이스 (검색/지식) 클라이언트
+            # RAG 데이터베이스 (검색/지식) 클라이언트 - 비동기
             self.rag_client = AsyncIOMotorClient(
                 rag_mongodb_uri,
                 maxPoolSize=50,
@@ -353,8 +362,26 @@ class ChatService:
                 serverSelectionTimeoutMS=5000,
                 connectTimeoutMS=10000,
             )
-            # 로그/대화 데이터베이스 클라이언트
+            # RAG 데이터베이스 - 동기 클라이언트 (스트리밍용)
+            self.rag_client_sync = MongoClient(
+                rag_mongodb_uri,
+                maxPoolSize=50,
+                minPoolSize=10,
+                maxIdleTimeMS=45000,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=10000,
+            )
+            # 로그/대화 데이터베이스 클라이언트 - 비동기
             self.log_client = AsyncIOMotorClient(
+                log_mongodb_uri,
+                maxPoolSize=50,
+                minPoolSize=10,
+                maxIdleTimeMS=45000,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=10000,
+            )
+            # 로그/대화 데이터베이스 클라이언트 - 동기 (스트리밍 후 저장용)
+            self.log_client_sync = MongoClient(
                 log_mongodb_uri,
                 maxPoolSize=50,
                 minPoolSize=10,
@@ -365,13 +392,20 @@ class ChatService:
 
             logging.info("MongoDB async clients initialized (RAG + LOG)")
 
-            # RAG DB/컬렉션 설정
+            # RAG DB/컬렉션 설정 (비동기)
             self.rag_db = self.rag_client[self.db_name]
             self.collection = self.rag_db[self.collection_name]
-            # 로그 DB/컬렉션 설정
+            # RAG DB/컬렉션 설정 (동기 - 스트리밍용)
+            rag_db_sync = self.rag_client_sync[self.db_name]
+            self.collection_sync = rag_db_sync[self.collection_name]
+            # 로그 DB/컬렉션 설정 (비동기)
             self.log_db = self.log_client["chatdb"]
             self.chat_collection = self.log_db["chat"]
             self.rooms_collection = self.log_db["rooms"]
+            # 로그 DB/컬렉션 설정 (동기 - 스트리밍 후 저장용)
+            log_db_sync = self.log_client_sync["chatdb"]
+            self.chat_collection_sync = log_db_sync["chat"]
+            self.rooms_collection_sync = log_db_sync["rooms"]
 
             logging.info("databases initialized successfully")
         except Exception as e:
@@ -414,13 +448,13 @@ class ChatService:
     def stream_query_model_response_with_docs(
         self, conversation_history, query_text, mongo_query=None, query_lang=None
     ):
-        """스트리밍 응답을 생성하는 제너레이터."""
+        """스트리밍 응답을 생성하는 제너레이터. (동기 컬렉션 사용)"""
 
         try:
             yield from self.model.generate_ai_response_stream(
                 conversation_history,
                 query_text,
-                self.collection,
+                self.collection_sync,  # 동기 컬렉션 사용
                 mongo_query=mongo_query,
                 query_lang=query_lang,
             )
@@ -475,6 +509,49 @@ class ChatService:
             logging.info(f"Chat log saved for room {room_id}")
         except Exception as e:
             logging.error(f"Error saving chat log: {e}")
+
+    def save_chat_log_sync(self, user_id: int, room_id: str, question: str, answer: str):
+        """
+        채팅 로그를 데이터베이스에 저장합니다. (동기 - 스트리밍 후 저장용)
+
+        Parameters:
+            user_id: 사용자 ID
+            room_id: 대화방 ID
+            question: 사용자 질문
+            answer: AI 답변
+        """
+        try:
+            # 사용자 메시지 저장
+            self.chat_collection_sync.insert_one(
+                {
+                    "roomId": room_id,
+                    "sender": "user",
+                    "content": question,
+                    "time": datetime.utcnow(),
+                    "_class": "Helloworld.helloworld_webflux.domain.ChatMessage",
+                }
+            )
+
+            # AI 응답 저장
+            self.chat_collection_sync.insert_one(
+                {
+                    "roomId": room_id,
+                    "sender": "bot",
+                    "content": answer,
+                    "time": datetime.utcnow(),
+                    "_class": "Helloworld.helloworld_webflux.domain.ChatMessage",
+                }
+            )
+
+            # rooms 컬렉션 updatedAt 업데이트
+            self.rooms_collection_sync.update_one(
+                {"_id": ObjectId(room_id)},
+                {"$set": {"updatedAt": datetime.utcnow()}},
+            )
+
+            logging.info(f"Chat log saved (sync) for room {room_id}")
+        except Exception as e:
+            logging.error(f"Error saving chat log (sync): {e}")
 
     async def get_recent_room_and_logs(self, user_id: int):
         """
@@ -556,6 +633,19 @@ async def chat_ask(request: Request):
             status_code=400,
             error="roomId 파라미터가 필요합니다.",
             details={"field": "roomId", "issue": "Missing required parameter"},
+        )
+
+    # roomId 유효성 검사 (MongoDB ObjectId 형식)
+    if not ObjectId.is_valid(room_id):
+        return create_response(
+            request,
+            status_code=400,
+            error="유효하지 않은 roomId 형식입니다.",
+            details={
+                "field": "roomId",
+                "value": room_id,
+                "issue": "roomId must be a 24-character hex string",
+            },
         )
 
     try:
@@ -712,11 +802,10 @@ async def chat_ask(request: Request):
             logging.info("[Answer] Final streamed answer=%s", final_answer)
             logging.info("[Total] Request completed in %.2f s", elapsed_seconds)
 
+            # 동기 메서드로 채팅 로그 저장 (이벤트 루프 충돌 방지)
             try:
-                asyncio.create_task(
-                    chat_service.save_chat_log(
-                        user_id, room_id, explicit_query, final_answer
-                    )
+                chat_service.save_chat_log_sync(
+                    user_id, room_id, explicit_query, final_answer
                 )
             except Exception as log_error:
                 logging.error(f"Failed to save chat log: {log_error}")
@@ -798,6 +887,17 @@ async def summary(request: Request):
                 max_tokens=300,
             )
         )
+
+        # OpenAI 토큰 사용량 로깅
+        if response.usage:
+            logging.info(
+                "[OpenAI Usage] endpoint=summary, model=%s, prompt_tokens=%d, "
+                "completion_tokens=%d, total_tokens=%d",
+                response.model,
+                response.usage.prompt_tokens,
+                response.usage.completion_tokens,
+                response.usage.total_tokens,
+            )
 
         summary_text = response.choices[0].message.content.strip()
 
@@ -978,6 +1078,87 @@ async def chat_recent_room(request: Request):
         )
 
 
+@app.delete("/api/chat/room")
+@require_auth
+async def delete_chat_room(request: Request):
+    """
+    채팅방과 해당 채팅 로그를 삭제하는 엔드포인트
+    """
+    logging.info("Delete chat room function triggered.")
+
+    user_id = request.state.user_id
+
+    room_id = request.query_params.get("roomId")
+    if not room_id:
+        return create_response(
+            request,
+            status_code=400,
+            error="roomId 파라미터가 필요합니다.",
+            details={"field": "roomId", "issue": "roomId parameter is required"},
+        )
+
+    # roomId 유효성 검사 (MongoDB ObjectId 형식)
+    if not ObjectId.is_valid(room_id):
+        return create_response(
+            request,
+            status_code=400,
+            error="유효하지 않은 roomId 형식입니다.",
+            details={
+                "field": "roomId",
+                "value": room_id,
+                "issue": "roomId must be a 24-character hex string",
+            },
+        )
+
+    try:
+        chat_service = await get_chat_service()
+
+        # 채팅방 존재 및 권한 확인
+        room = await chat_service.rooms_collection.find_one({"_id": ObjectId(room_id)})
+        if not room:
+            return create_response(
+                request,
+                status_code=404,
+                error="채팅방을 찾을 수 없습니다.",
+                details={"roomId": room_id, "issue": "Room not found"},
+            )
+
+        if room.get("userId") != user_id:
+            return create_response(
+                request,
+                status_code=403,
+                error="해당 채팅방에 대한 삭제 권한이 없습니다.",
+                details={"roomId": room_id, "issue": "Access denied"},
+            )
+
+        # 채팅 로그 삭제
+        chat_delete_result = await chat_service.chat_collection.delete_many({"roomId": room_id})
+        logging.info(f"Deleted {chat_delete_result.deleted_count} chat messages for room {room_id}")
+
+        # 채팅방 삭제
+        room_delete_result = await chat_service.rooms_collection.delete_one({"_id": ObjectId(room_id)})
+        logging.info(f"Deleted room {room_id}")
+
+        return create_response(
+            request,
+            status_code=200,
+            data={
+                "roomId": room_id,
+                "deletedMessages": chat_delete_result.deleted_count,
+                "message": "채팅방이 성공적으로 삭제되었습니다.",
+            },
+        )
+
+    except Exception as e:
+        logging.exception("Delete chat room handler failed")
+        return create_response(
+            request,
+            status_code=500,
+            error="채팅방 삭제 중 오류가 발생했습니다.",
+            details={"errorType": type(e).__name__, "errorMessage": str(e)},
+        )
+
+
 @app.post("/api/cv_generation")
 @require_auth
 async def cv_generation(request: Request):
@@ -1056,6 +1237,18 @@ async def cv_generation(request: Request):
         ]
 
         response = llm.invoke(input=messages)
+
+        # OpenAI 토큰 사용량 로깅 (LangChain)
+        if hasattr(response, 'response_metadata') and response.response_metadata:
+            token_usage = response.response_metadata.get('token_usage', {})
+            logging.info(
+                "[OpenAI Usage] endpoint=cv_generation, model=%s, prompt_tokens=%d, "
+                "completion_tokens=%d, total_tokens=%d",
+                response.response_metadata.get('model_name', 'gpt-4o-mini'),
+                token_usage.get('prompt_tokens', 0),
+                token_usage.get('completion_tokens', 0),
+                token_usage.get('total_tokens', 0),
+            )
 
         content = response.content
         intro_start = content.find("<자기소개문장>") + len("<자기소개문장>")
