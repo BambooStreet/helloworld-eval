@@ -1048,6 +1048,72 @@ async def get_user_chat_rooms(request: Request):
         )
 
 
+@app.delete("/api/chat/user-rooms")
+@require_auth
+async def delete_all_user_chat_rooms(request: Request):
+    """
+    사용자의 모든 채팅방과 해당 채팅 로그를 삭제하는 엔드포인트
+    """
+    logging.info("Delete all user chat rooms function triggered.")
+
+    user_id = request.state.user_id
+
+    try:
+        chat_service = await get_chat_service()
+
+        # 사용자의 모든 채팅방 조회
+        cursor = chat_service.rooms_collection.find({"userId": user_id})
+        rooms = await cursor.to_list(length=None)
+
+        if not rooms:
+            return create_response(
+                request,
+                status_code=200,
+                data={
+                    "deletedRooms": 0,
+                    "deletedMessages": 0,
+                    "message": "삭제할 채팅방이 없습니다.",
+                },
+            )
+
+        room_ids = [str(room["_id"]) for room in rooms]
+
+        # 모든 채팅 로그 삭제
+        chat_delete_result = await chat_service.chat_collection.delete_many(
+            {"roomId": {"$in": room_ids}}
+        )
+        deleted_messages = chat_delete_result.deleted_count
+
+        # 모든 채팅방 삭제
+        room_delete_result = await chat_service.rooms_collection.delete_many(
+            {"userId": user_id}
+        )
+        deleted_rooms = room_delete_result.deleted_count
+
+        logging.info(
+            f"Deleted {deleted_rooms} rooms and {deleted_messages} messages for user {user_id}"
+        )
+
+        return create_response(
+            request,
+            status_code=200,
+            data={
+                "deletedRooms": deleted_rooms,
+                "deletedMessages": deleted_messages,
+                "message": "모든 채팅방이 성공적으로 삭제되었습니다.",
+            },
+        )
+
+    except Exception as e:
+        logging.exception("Delete all user chat rooms handler failed")
+        return create_response(
+            request,
+            status_code=500,
+            error="채팅방 전체 삭제 중 오류가 발생했습니다.",
+            details={"errorType": type(e).__name__, "errorMessage": str(e)},
+        )
+
+
 @app.get("/api/chat/recent-room")
 @require_auth
 async def chat_recent_room(request: Request):
