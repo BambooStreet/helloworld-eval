@@ -537,138 +537,6 @@ class ChatService:
             return {"roomId": room_id, "chatLogs": []}
 
 
-# 사용자 요청 수신
-@app.post("/api/question")
-@require_auth
-async def question(request: Request):
-    """
-    이 함수는 HTTP POST 요청을 통해 사용자의 대화 내용을 받고,
-    AI 응답을 생성하는 엔드포인트입니다.
-    """
-
-    logging.info("Question function triggered.")
-
-    user_id = request.state.user_id
-    _ = user_id
-
-    try:
-        chat_service = await get_chat_service()
-
-        req_body = await request.json()
-        conversation = req_body.get("Conversation", [])
-        if conversation is None:
-            conversation = []
-
-        logging.info(
-            "[question] Incoming conversation turns=%d, payload=%s",
-            len(conversation),
-            json.dumps(req_body, ensure_ascii=False),
-        )
-
-        processing_start = time.perf_counter()
-
-        explicit_query = req_body.get("query")
-        if explicit_query is None or str(explicit_query).strip() == "":
-            user_query = next(
-                (
-                    item["utterance"]
-                    for item in reversed(conversation)
-                    if item.get("speaker") == "human"
-                ),
-                None,
-            )
-            if not user_query:
-                return create_response(
-                    request,
-                    status_code=400,
-                    error="질문 내용이 제공되지 않았습니다.",
-                    details={"field": "query", "issue": "No query provided in conversation"},
-                )
-            explicit_query = user_query
-
-        translate_start = time.perf_counter()
-        try:
-            translation_result = chat_service.translate_model.translate_query(
-                explicit_query
-            )
-        except Exception as exc:
-            logging.error("Translation failed: %s", exc, exc_info=True)
-            return create_response(
-                request,
-                status_code=500,
-                error="질문 번역 처리에 실패했습니다.",
-                details={"errorType": type(exc).__name__, "errorMessage": str(exc)},
-            )
-
-        translated_query = translation_result["translated_query"]
-        query_lang = translation_result.get("query_lang")
-        mongo_query = translation_result.get("mongo_query") or []
-
-        translate_duration = time.perf_counter() - translate_start
-        logging.info("[Translate] Completed in %.2f s (lang=%s)", translate_duration, query_lang)
-
-        logging.info(
-            "[question] Translation result lang=%s translated=%s pipeline=%s",
-            query_lang,
-            translated_query,
-            json.dumps(mongo_query, ensure_ascii=False),
-        )
-
-        if "mongo_query" in req_body:
-            try:
-                mongo_query = parse_mongo_query(req_body.get("mongo_query"))
-            except Exception as exc:
-                logging.error("Invalid mongo_query provided: %s", exc, exc_info=True)
-                return create_response(
-                    request,
-                    status_code=400,
-                    error="잘못된 MongoDB 쿼리 형식입니다.",
-                    details={
-                        "field": "mongo_query",
-                        "errorType": type(exc).__name__,
-                        "errorMessage": str(exc),
-                    },
-                )
-
-        augmented_conversation = list(conversation)
-        augmented_conversation.append({"speaker": "human", "utterance": translated_query})
-
-        response = chat_service.get_query_model_response_with_docs(
-            augmented_conversation,
-            translated_query,
-            mongo_query=mongo_query,
-            query_lang=query_lang,
-        )
-
-        elapsed_seconds = time.perf_counter() - processing_start
-
-        logging.info("[Answer] Final answer=%s", response["answer"])
-        logging.info("[Total] Request completed in %.2f s", elapsed_seconds)
-
-        return create_response(
-            request,
-            status_code=200,
-            data={"answer": response["answer"]},
-        )
-
-    except ValueError as e:
-        logging.error(f"Invalid JSON format: {e}", exc_info=True)
-        return create_response(
-            request,
-            status_code=400,
-            error="잘못된 JSON 형식입니다.",
-            details={"errorType": "ValueError", "errorMessage": str(e)},
-        )
-    except Exception as e:
-        logging.exception("Question handler failed")
-        return create_response(
-            request,
-            status_code=500,
-            error="서버 내부 오류가 발생했습니다.",
-            details={"errorType": type(e).__name__, "errorMessage": str(e)},
-        )
-
-
 # question_stream -> chat/ask
 # 대화 기록 기반의 List[str] 입력받기
 @app.post("/api/chat/ask")
@@ -992,6 +860,90 @@ async def chat_room_log(request: Request):
             request,
             status_code=500,
             error="대화방 로그 조회 중 오류가 발생했습니다.",
+            details={"errorType": type(e).__name__, "errorMessage": str(e)},
+        )
+
+
+@app.post("/api/chat/create-room")
+@require_auth
+async def create_chat_room(request: Request):
+    """
+    새로운 채팅방을 생성하고 roomId를 반환하는 엔드포인트
+    """
+    logging.info("Create chat room function triggered.")
+
+    user_id = request.state.user_id
+
+    try:
+        chat_service = await get_chat_service()
+
+        new_room = {
+            "userId": user_id,
+            "createdAt": datetime.utcnow(),
+            "updatedAt": datetime.utcnow(),
+            "_class": "Helloworld.helloworld_webflux.domain.Room",
+        }
+
+        result = await chat_service.rooms_collection.insert_one(new_room)
+        room_id = str(result.inserted_id)
+
+        logging.info(f"New chat room created: {room_id} for user {user_id}")
+
+        return create_response(
+            request,
+            status_code=201,
+            data={"roomId": room_id},
+        )
+    except Exception as e:
+        logging.exception("Create chat room handler failed")
+        return create_response(
+            request,
+            status_code=500,
+            error="채팅방 생성 중 오류가 발생했습니다.",
+            details={"errorType": type(e).__name__, "errorMessage": str(e)},
+        )
+
+
+@app.get("/api/chat/rooms")
+@require_auth
+async def get_user_chat_rooms(request: Request):
+    """
+    사용자가 가지고 있는 모든 채팅방 목록을 반환하는 엔드포인트
+    """
+    logging.info("Get user chat rooms function triggered.")
+
+    user_id = request.state.user_id
+
+    try:
+        chat_service = await get_chat_service()
+
+        cursor = chat_service.rooms_collection.find(
+            {"userId": user_id}
+        ).sort("updatedAt", -1)
+
+        rooms = await cursor.to_list(length=None)
+
+        room_list = []
+        for room in rooms:
+            room_list.append({
+                "roomId": str(room["_id"]),
+                "createdAt": room.get("createdAt").isoformat() if room.get("createdAt") else None,
+                "updatedAt": room.get("updatedAt").isoformat() if room.get("updatedAt") else None,
+            })
+
+        logging.info(f"Found {len(room_list)} rooms for user {user_id}")
+
+        return create_response(
+            request,
+            status_code=200,
+            data={"rooms": room_list},
+        )
+    except Exception as e:
+        logging.exception("Get user chat rooms handler failed")
+        return create_response(
+            request,
+            status_code=500,
+            error="채팅방 목록 조회 중 오류가 발생했습니다.",
             details={"errorType": type(e).__name__, "errorMessage": str(e)},
         )
 
