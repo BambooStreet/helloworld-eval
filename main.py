@@ -1004,7 +1004,7 @@ async def create_chat_room(request: Request):
         )
 
 
-@app.get("/api/chat/rooms")
+@app.get("/api/chat/user-rooms")
 @require_auth
 async def get_user_chat_rooms(request: Request):
     """
