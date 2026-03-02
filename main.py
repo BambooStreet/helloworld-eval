@@ -11,7 +11,7 @@ from http import HTTPStatus
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAI
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 from bson import ObjectId
@@ -32,6 +32,7 @@ app = FastAPI()
 _chat_service = None
 _service_lock = threading.Lock()
 _openai_client = None
+_openai_client_sync = None
 
 # OpenAI 동시 요청 제어를 위한 세마포어
 # 동시에 최대 100개 요청까지 허용
@@ -86,6 +87,17 @@ async def get_openai_client():
             raise ValueError("OPENAI_API_KEY environment variable is not set")
         _openai_client = AsyncOpenAI(api_key=api_key)
     return _openai_client
+
+
+def get_openai_client_sync():
+    """동기 OpenAI 클라이언트 싱글톤 (스트리밍 후 저장용)"""
+    global _openai_client_sync
+    if _openai_client_sync is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
+        _openai_client_sync = OpenAI(api_key=api_key)
+    return _openai_client_sync
 
 
 async def openai_request_with_limit(coroutine):
@@ -500,15 +512,60 @@ class ChatService:
                 }
             )
 
-            # rooms 컬렉션 updatedAt 업데이트
+            # rooms 컬렉션 updatedAt 업데이트 (roomTitle이 없으면 생성)
+            room = await self.rooms_collection.find_one(
+                {"_id": ObjectId(room_id)}, {"roomTitle": 1}
+            )
+            update_fields = {"updatedAt": datetime.utcnow()}
+            if room and not room.get("roomTitle"):
+                update_fields["roomTitle"] = self.generate_room_title_sync(question, answer)
+
             await self.rooms_collection.update_one(
                 {"_id": ObjectId(room_id)},
-                {"$set": {"updatedAt": datetime.utcnow()}},
+                {"$set": update_fields},
             )
 
             logging.info(f"Chat log saved for room {room_id}")
         except Exception as e:
             logging.error(f"Error saving chat log: {e}")
+
+    def generate_room_title_sync(self, question: str, answer: str) -> str:
+        """
+        채팅 Q&A를 바탕으로 30자 이내의 채팅방 제목을 생성합니다. (동기)
+
+        Parameters:
+            question: 사용자 질문
+            answer: AI 답변
+
+        Returns:
+            str: 30자 이내의 채팅방 제목
+        """
+        try:
+            client = get_openai_client_sync()
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "다음 Q&A를 보고 채팅방 제목을 만들어주세요. "
+                            "반드시 30자 이내로, 핵심 주제만 간결하게 작성하세요. "
+                            "제목 텍스트만 출력하고 다른 내용은 출력하지 마세요."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"질문: {question[:300]}\n답변: {answer[:300]}",
+                    },
+                ],
+                temperature=0.3,
+                max_tokens=60,
+            )
+            title = response.choices[0].message.content.strip()
+            return title[:30]
+        except Exception as e:
+            logging.error(f"Error generating room title: {e}")
+            return question[:30]
 
     def save_chat_log_sync(self, user_id: int, room_id: str, question: str, answer: str):
         """
@@ -543,10 +600,17 @@ class ChatService:
                 }
             )
 
-            # rooms 컬렉션 updatedAt 업데이트
+            # rooms 컬렉션 updatedAt 업데이트 (roomTitle이 없으면 생성)
+            room = self.rooms_collection_sync.find_one(
+                {"_id": ObjectId(room_id)}, {"roomTitle": 1}
+            )
+            update_fields = {"updatedAt": datetime.utcnow()}
+            if room and not room.get("roomTitle"):
+                update_fields["roomTitle"] = self.generate_room_title_sync(question, answer)
+
             self.rooms_collection_sync.update_one(
                 {"_id": ObjectId(room_id)},
-                {"$set": {"updatedAt": datetime.utcnow()}},
+                {"$set": update_fields},
             )
 
             logging.info(f"Chat log saved (sync) for room {room_id}")
@@ -591,8 +655,8 @@ class ChatService:
             권한이 없으면 None 반환
         """
         try:
+            room = await self.rooms_collection.find_one({"_id": ObjectId(room_id)})
             if user_id is not None:
-                room = await self.rooms_collection.find_one({"_id": ObjectId(room_id)})
                 if not room:
                     logging.warning(f"Room {room_id} not found")
                     return None
@@ -608,10 +672,11 @@ class ChatService:
             for log in logs:
                 chat_logs.append({"content": log["content"], "sender": log["sender"]})
 
-            return {"roomId": room_id, "chatLogs": chat_logs}
+            room_title = room.get("roomTitle") if room else None
+            return {"roomId": room_id, "roomTitle": room_title, "chatLogs": chat_logs}
         except Exception as e:
             logging.error(f"Error fetching room logs: {e}")
-            return {"roomId": room_id, "chatLogs": []}
+            return {"roomId": room_id, "roomTitle": None, "chatLogs": []}
 
 
 # question_stream -> chat/ask
@@ -901,6 +966,12 @@ async def summary(request: Request):
 
         summary_text = response.choices[0].message.content.strip()
 
+        # 생성된 요약을 rooms 컬렉션에 저장
+        await chat_service.rooms_collection.update_one(
+            {"_id": ObjectId(room_id)},
+            {"$set": {"roomSummary": summary_text}},
+        )
+
         return create_response(
             request,
             status_code=200,
@@ -1027,6 +1098,7 @@ async def get_user_chat_rooms(request: Request):
         for room in rooms:
             room_list.append({
                 "roomId": str(room["_id"]),
+                "roomTitle": room.get("roomTitle"),
                 "createdAt": room.get("createdAt").isoformat() if room.get("createdAt") else None,
                 "updatedAt": room.get("updatedAt").isoformat() if room.get("updatedAt") else None,
             })
@@ -1044,6 +1116,52 @@ async def get_user_chat_rooms(request: Request):
             request,
             status_code=500,
             error="채팅방 목록 조회 중 오류가 발생했습니다.",
+            details={"errorType": type(e).__name__, "errorMessage": str(e)},
+        )
+
+
+@app.get("/api/chat/user-summaries")
+@require_auth
+async def get_user_chat_summaries(request: Request):
+    """
+    마이페이지용: 사용자의 모든 채팅방 요약 목록을 반환하는 엔드포인트.
+    roomSummary가 없는 방은 null로 반환되며, /api/summary 호출 시 생성 및 저장됩니다.
+    """
+    logging.info("Get user chat summaries function triggered.")
+
+    user_id = request.state.user_id
+
+    try:
+        chat_service = await get_chat_service()
+
+        cursor = chat_service.rooms_collection.find(
+            {"userId": user_id}
+        ).sort("updatedAt", -1)
+
+        rooms = await cursor.to_list(length=None)
+
+        summary_list = []
+        for room in rooms:
+            summary_list.append({
+                "roomId": str(room["_id"]),
+                "roomTitle": room.get("roomTitle"),
+                "roomSummary": room.get("roomSummary"),
+                "updatedAt": room.get("updatedAt").isoformat() if room.get("updatedAt") else None,
+            })
+
+        logging.info(f"Found {len(summary_list)} room summaries for user {user_id}")
+
+        return create_response(
+            request,
+            status_code=200,
+            data={"summaries": summary_list},
+        )
+    except Exception as e:
+        logging.exception("Get user chat summaries handler failed")
+        return create_response(
+            request,
+            status_code=500,
+            error="상담 요약 목록 조회 중 오류가 발생했습니다.",
             details={"errorType": type(e).__name__, "errorMessage": str(e)},
         )
 
