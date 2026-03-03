@@ -1142,6 +1142,8 @@ async def get_user_chat_summaries(request: Request):
 
         summary_list = []
         for room in rooms:
+            if room.get("roomSummary") is None:
+                continue
             summary_list.append({
                 "roomId": str(room["_id"]),
                 "roomTitle": room.get("roomTitle"),
