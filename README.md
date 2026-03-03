@@ -18,6 +18,7 @@ Azure CI/CD 배포용
   - [6. 채팅방 목록 조회 (GET /api/chat/rooms)](#6-채팅방-목록-조회-get-apichatrooms)
   - [7. 채팅방 삭제 (DELETE /api/chat/room)](#7-채팅방-삭제-delete-apichatroom)
   - [8. 이력서 생성 엔드포인트 (POST /api/cv_generation)](#8-이력서-생성-엔드포인트-post-apicv_generation)
+  - [9. 채팅방 요약 조회 (GET /api/chat/room-summary)](#9-채팅방-요약-조회-get-apichatroom-summary)
 - [빠른 테스트 체크리스트](#빠른-테스트-체크리스트)
 - [문제 해결 가이드](#문제-해결-가이드)
 
@@ -68,6 +69,7 @@ Functions:
 | POST | `/api/chat/create-room` | 필요 | 채팅방 생성 |
 | GET | `/api/chat/user-rooms` | 필요 | 사용자 채팅방 목록 조회 |
 | GET | `/api/chat/user-summaries` | 필요 | 마이페이지용 상담 요약 목록 |
+| GET | `/api/chat/room-summary?roomId=<id>` | 필요 | 특정 채팅방 요약 조회 |
 | DELETE | `/api/chat/user-rooms` | 필요 | 전체 채팅방 및 로그 삭제 |
 | DELETE | `/api/chat/room?roomId=<id>` | 필요 | 단일 채팅방 및 로그 삭제 |
 | POST | `/api/cv_generation` | 필요 | 한국어 이력서 생성 |
@@ -427,6 +429,49 @@ JWT 토큰을 가진 사용자가 소유한 모든 채팅방의 제목 및 roomI
 
 ---
 
+## 9. 채팅방 요약 조회 (GET /api/chat/room-summary)
+
+### 역할
+특정 채팅방의 저장된 요약 정보를 반환합니다. `roomSummary`가 없는 경우 `null`로 반환되며, 이 경우 `/api/summary`를 먼저 호출해 요약을 생성해야 합니다. `roomId`, `roomTitle`을 함께 반환하므로 요약 목록에서 채팅으로 이동하는 로직에 활용할 수 있습니다.
+
+### 요청 설정
+- **Method**: `GET`
+- **URL**: `/api/chat/room-summary?roomId=<ROOM_ID>`
+- **인증**: 필수 (`Authorization: Bearer <JWT_TOKEN>`)
+- **Headers**:
+  - `Authorization: Bearer <JWT_TOKEN>`
+- **Query Parameters**:
+  - `roomId` (필수): 대화방 ID (24자리 MongoDB ObjectId)
+
+### 예상 응답 (200 OK)
+```json
+{
+    "timestamp": "2026-01-19T12:34:56.789Z",
+    "path": "/api/chat/room-summary?roomId=abc123",
+    "status": 200,
+    "error": "OK",
+    "requestId": "abc-123-def-456",
+    "data": {
+        "roomId": "abc123",
+        "roomTitle": "E-7 비자 신청 절차 문의",
+        "roomSummary": "E-7 비자 신청 절차와 필요 서류에 대한 상담",
+        "updatedAt": "2026-01-19T12:34:56.789Z"
+    }
+}
+```
+
+**응답 필드 설명**:
+- `roomId`: 채팅방 고유 ID
+- `roomTitle`: 채팅방 제목 (없으면 `null`)
+- `roomSummary`: 저장된 요약 내용 (`/api/summary` 미호출 시 `null`)
+- `updatedAt`: 마지막 대화 저장 시각
+
+### 에러 응답
+- **400 Bad Request**: `roomId` 미전달
+- **404 Not Found**: 채팅방을 찾을 수 없음 (존재하지 않거나 본인 소유가 아닌 경우)
+
+---
+
 ## 빠른 테스트 체크리스트
 
 ### ✅ 1단계: 기본 연결 확인
@@ -457,6 +502,14 @@ Headers: Authorization: Bearer <JWT_TOKEN>
 GET /api/chat/user-summaries
 Headers: Authorization: Bearer <JWT_TOKEN>
 → 200 OK + summaries 배열, roomTitle / roomSummary 필드 확인
+```
+
+### ✅ 9단계: 특정 채팅방 요약 조회 (인증 필요)
+```
+GET /api/chat/room-summary?roomId=<ROOM_ID>
+Headers: Authorization: Bearer <JWT_TOKEN>
+→ 200 OK + roomId, roomTitle, roomSummary, updatedAt 필드 확인
+→ roomSummary가 null이면 /api/summary 먼저 호출 후 재조회
 ```
 
 ### ✅ 4단계: 대화방 로그 조회 (인증 필요)
@@ -521,6 +574,7 @@ Body: 완전한 이력서 데이터 (위 명세 참조)
   - `/api/chat/ask`: `query` 필드, `roomId` 파라미터
   - `/api/summary`: `roomId` 파라미터
   - `/api/chat/room-log`: `roomId` 파라미터
+  - `/api/chat/room-summary`: `roomId` 파라미터
   - `/api/chat/room` (DELETE): `roomId` 파라미터
   - `/api/cv_generation`: `personal`, `experience`, `language` 필드
 
@@ -553,3 +607,4 @@ Body: 완전한 이력서 데이터 (위 명세 참조)
 | 6 | GET | `/api/chat/rooms` | ✅ | - | 채팅방 목록 |
 | 7 | DELETE | `/api/chat/room` | ✅ | `roomId` (query) | 채팅방 삭제 |
 | 8 | POST | `/api/cv_generation` | ✅ | `personal`, `experience`, `language` (body) | 이력서 생성 |
+| 9 | GET | `/api/chat/room-summary` | ✅ | `roomId` (query) | 채팅방 요약 조회 |
