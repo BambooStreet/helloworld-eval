@@ -12,7 +12,13 @@ from .adapter import ChatbotAdapter
 from .persona_chat import render_persona_system_prompt
 
 PERSONA_PROMPT_ID = "persona_user"
-PERSONA_PROMPT_VERSION = "v1"
+PERSONA_PROMPT_VERSION = "v2"
+
+# Sentinel the persona appends to its final utterance to signal natural completion.
+# The orchestrator strips it before forwarding to the chatbot so the chatbot never
+# sees the bare token; conversation ends after the chatbot's response to the final
+# (stripped) message. See prompts/persona_user/v2.md rule 7.
+DONE_TOKEN = "<<DONE>>"
 
 ConversationStatus = Literal["completed", "max_turns", "failed"]
 
@@ -98,8 +104,16 @@ async def run_conversation(
                     "failed", f"persona LLM error: {exc}",
                 )
 
-            user_msg = persona_result.content.strip()
+            raw_msg = persona_result.content.strip()
+            done_signal = DONE_TOKEN in raw_msg
+            user_msg = raw_msg.replace(DONE_TOKEN, "").strip()
+
             if not user_msg:
+                if done_signal:
+                    # Persona signaled done with no closing message; end without a bot turn.
+                    return _finalize(
+                        persona, session, run_id, turns, log_path, "completed", None
+                    )
                 return _finalize(
                     persona, session, run_id, turns, log_path,
                     "failed", "persona returned empty utterance",
@@ -144,6 +158,11 @@ async def run_conversation(
             log_f.write(bot_turn.model_dump_json() + "\n")
             log_f.flush()
             history.append({"role": "user", "content": bot_response.content})
+
+            if done_signal:
+                return _finalize(
+                    persona, session, run_id, turns, log_path, "completed", None
+                )
 
     return _finalize(persona, session, run_id, turns, log_path, "max_turns", None)
 

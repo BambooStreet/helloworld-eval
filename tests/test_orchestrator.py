@@ -14,6 +14,7 @@ from evaluation.core.prompts import Prompt
 from evaluation.personas.schema import Persona
 from evaluation.simulator.adapter import ChatbotResponse, MockChatbotAdapter
 from evaluation.simulator.orchestrator import (
+    DONE_TOKEN,
     make_session_id,
     run_conversation,
 )
@@ -199,6 +200,58 @@ async def test_run_conversation_persona_history_accumulates(tmp_path: Path) -> N
 
 def test_make_session_id_format() -> None:
     assert make_session_id("run-abc", "persona-1") == "eval-run-abc-persona-1"
+
+
+async def test_done_token_with_closing_message_completes(tmp_path: Path) -> None:
+    """Persona signals DONE alongside a final thank-you. The chatbot should still
+    receive the (stripped) message and reply once, then conversation terminates."""
+    llm = StubLLM(["첫 질문", f"감사합니다 {DONE_TOKEN}"])
+    adapter = MockChatbotAdapter(responses=["답변1", "답변2"])
+    log_path = tmp_path / "conv.jsonl"
+
+    result = await run_conversation(
+        persona=_persona(),
+        persona_prompt=_prompt(),
+        adapter=adapter,
+        llm=llm,
+        run_id="r",
+        max_turns=10,
+        log_path=log_path,
+    )
+
+    assert result.status == "completed"
+    assert result.failure_reason is None
+    assert result.total_user_turns == 2
+    assert result.total_bot_turns == 2
+
+    lines = _read_jsonl(log_path)
+    # The DONE token must be stripped from the logged user content
+    assert DONE_TOKEN not in lines[2]["content"]
+    assert lines[2]["content"] == "감사합니다"
+
+
+async def test_done_token_only_message_completes_without_bot_turn(
+    tmp_path: Path,
+) -> None:
+    """Persona returns ONLY the DONE token (no closing message). End immediately
+    with no bot turn for that round."""
+    llm = StubLLM(["질문", DONE_TOKEN])
+    adapter = MockChatbotAdapter(responses=["답변1"])
+    log_path = tmp_path / "conv.jsonl"
+
+    result = await run_conversation(
+        persona=_persona(),
+        persona_prompt=_prompt(),
+        adapter=adapter,
+        llm=llm,
+        run_id="r",
+        max_turns=10,
+        log_path=log_path,
+    )
+
+    assert result.status == "completed"
+    assert result.total_user_turns == 1
+    assert result.total_bot_turns == 1
 
 
 @pytest.mark.parametrize("turns", [1, 5, 10])
