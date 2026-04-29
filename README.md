@@ -6,18 +6,15 @@
 
 ### 1. 의존성 설치
 
-`uv` 사용 시:
+[uv](https://docs.astral.sh/uv/)로 관리합니다. `pyproject.toml`에 의존성, `uv.lock`에 정확한 버전이 고정돼 있습니다.
+
 ```bash
-uv venv
-uv pip install -r requirements.txt
+uv sync
 ```
 
-`pip` 사용 시:
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+`.venv/`가 생성되고 락파일에 따라 패키지가 설치됩니다.
+
+의존성 추가/제거는 `uv add <패키지>` / `uv remove <패키지>`.
 
 ### 2. 환경 변수
 
@@ -116,6 +113,7 @@ query_model.py        # 하이브리드 검색 + 응답 생성
 translate_model.py    # 질문 번역 + mongo_query 파이프라인 생성
 prompts/prompts.py    # 프롬프트 템플릿
 utils.py              # parse_mongo_query
-requirements.txt      # 런타임 의존성
+pyproject.toml        # uv 프로젝트 메타 + 의존성 선언
+uv.lock               # uv 락파일 (정확한 버전 고정)
 logs/                 # (gitignored) 요청별 JSONL 로그
 ```

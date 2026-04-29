@@ -1,0 +1,13 @@
+[project]
+name = "helloworld-eval"
+version = "0.1.0"
+description = "로컬 평가용 챗봇 슬림 백엔드 (외국인 비자/취업 법률 RAG)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "langchain-openai",
+    "pymongo",
+    "python-dotenv",
+]
