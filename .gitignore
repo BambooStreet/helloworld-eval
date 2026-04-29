@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Runtime artifacts (per-run outputs)
+runs/*/
+!runs/.gitkeep
+
+# Generated data
+data/personas/*.json
+data/conversations/*.jsonl
+data/reports/*.md
+
+# Secrets
+.env
+.env.*
+!.env.example
