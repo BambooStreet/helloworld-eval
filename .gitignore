@@ -10,14 +10,10 @@ venv/
 dist/
 build/
 
-# Runtime artifacts (per-run outputs)
-runs/*/
-!runs/.gitkeep
-
-# Generated data
-data/personas/*.json
-data/conversations/*.jsonl
-data/reports/*.md
+# Runtime artifacts and generated data are tracked as the project's audit trail
+# (canonical evaluation snapshots: which personas, which conversations, which scores).
+# If the repo grows unwieldy later, reintroduce ignore rules here and force-add only
+# canonical milestones with `git add -f`.
 
 # Secrets
 .env

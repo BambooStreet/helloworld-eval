@@ -1,0 +1,53 @@
+{
+  "id": "foreign_worker_02_ph_visa",
+  "name": "마리아 산토스",
+  "seed_id": "foreign_worker_02_ph_visa",
+  "demographics": {
+    "age_band": "30대 초반",
+    "gender": "여성",
+    "nationality": "필리핀",
+    "occupation": "가사도우미",
+    "residence": "서울 강서구",
+    "korean_proficiency": "중급",
+    "digital_literacy": "스마트폰 능숙, PC는 가끔 사용"
+  },
+  "context": {
+    "when": "저녁 시간, 아이를 재운 후",
+    "where": "자택",
+    "device": "스마트폰, 안드로이드",
+    "emotional_state": "진지, 차분"
+  },
+  "task": {
+    "goal": "비자 연장 또는 변경 방법과 필요한 서류를 정확히 파악하고 싶다.",
+    "success_criteria": [
+      "비자 연장 또는 변경 옵션이 2개 이상 안내되었다.",
+      "필요한 서류 목록이 구체적으로 제공되었다.",
+      "가족이 도와줄 수 있는 일에 대한 정보가 포함되었다."
+    ]
+  },
+  "background_story": "마리아는 필리핀에서 온 가사도우미로, 서울 강서구의 한 가정에서 5세 아동을 돌보며 2년 4개월을 보냈다. 그녀는 E-9 비자가 만료되기 6개월 전, 가족이 자녀 돌봄 인력으로 계속 두고 싶어하는 상황에서 비자 연장 또는 다른 자격으로 변경하는 방법을 찾고 있다. 이전에 출입국·외국인청 홈페이지를 방문했지만, 자신의 상황에 맞는 정보를 찾는 데 어려움을 겪었다. 그래서 이번에는 챗봇을 통해 보다 구체적이고 명확한 정보를 얻고자 한다.",
+  "communication_style": {
+    "tone": "공손하지만 진지한",
+    "info_disclosure": "수동적: 묻지 않으면 자세히 말 안 함, 한 번에 한 정보씩만 노출",
+    "complaint_expression": "정보가 부족하다는 불만을 조심스럽게 표현",
+    "typical_phrasing": [
+      "비자 연장에 대해 알고 싶어요.",
+      "어떤 서류가 필요한가요?",
+      "가족이 도와줄 수 있는 부분은 무엇인가요?",
+      "이 정보가 제 상황에 맞는지 확인하고 싶어요.",
+      "더 많은 정보를 주실 수 있나요?"
+    ],
+    "quirks": [
+      "행정 용어에 대한 이해가 부족해 질문을 자주 함",
+      "정보를 정리하는 데 시간이 걸림"
+    ]
+  },
+  "generated_with": {
+    "prompt_id": "persona_generator",
+    "prompt_version": "v1",
+    "prompt_sha256": "9f92df9c5a87938bd0aa3334be4d61e3fbf8c67345ab1983b5e1fac3d6e7b27f",
+    "model_id": "gpt-4o-mini",
+    "model_version": "fp_b9ca58c2f4",
+    "temperature": 0.0
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "id": "foreign_worker_03_np_injury",
+  "name": "람 바하두르",
+  "seed_id": "foreign_worker_03_np_injury",
+  "demographics": {
+    "age_band": "30대 초반",
+    "gender": "남성",
+    "nationality": "네팔",
+    "occupation": "건설 현장 철근 작업자",
+    "residence": "부산",
+    "korean_proficiency": "초급",
+    "digital_literacy": "스마트폰 능숙, PC는 거의 안 씀"
+  },
+  "context": {
+    "when": "저녁 퇴근 후, 통증이 심할 때",
+    "where": "작업 중인 아파트 현장 근처",
+    "device": "스마트폰, 안드로이드",
+    "emotional_state": "짜증, 불확실성"
+  },
+  "task": {
+    "goal": "산재 신청 절차와 공상 처리의 차이를 명확히 이해하고 싶다.",
+    "success_criteria": [
+      "산재 신청 절차가 단계별로 안내되었다.",
+      "필요 서류 목록이 제공되었다.",
+      "받을 수 있는 보상 종류가 설명되었다.",
+      "공상 처리와 산재의 차이가 명확히 설명되었다."
+    ]
+  },
+  "background_story": "부산의 아파트 신축 현장에서 일하는 람 바하두르는 최근 발판 사고로 발목을 다쳤다. 동료들은 그에게 산재 신청을 권유했지만, 사장은 공상으로 처리하면 더 빨리 보상을 받을 수 있다고 말했다. 람은 어떤 선택이 자신에게 더 유리한지 확신이 서지 않아 불안한 마음을 가지고 있다. 그는 인터넷 카페에서 정보를 찾아보았지만, 일관된 절차를 이해하지 못해 답답함을 느끼고 있다. 이제는 확실한 정보를 얻고 싶어 챗봇을 이용해 도움을 요청하고자 한다.",
+  "communication_style": {
+    "tone": "공손하지만 답답해하는",
+    "info_disclosure": "수동적: 묻지 않으면 자세히 말 안 함, 한 번에 한 정보씩만 노출",
+    "complaint_expression": "불만을 표현할 때는 짧고 간결하게, '이해가 안 돼요'라고 말함",
+    "typical_phrasing": [
+      "산재 신청은 어떻게 하나요?",
+      "공상과 산재의 차이가 뭐예요?",
+      "어떤 서류가 필요한가요?",
+      "보상은 얼마나 받을 수 있나요?",
+      "이해가 잘 안 돼요, 다시 설명해 주세요."
+    ],
+    "quirks": [
+      "한국어 조사 가끔 틀림",
+      "어려운 단어는 되묻기 자주 함"
+    ]
+  },
+  "generated_with": {
+    "prompt_id": "persona_generator",
+    "prompt_version": "v1",
+    "prompt_sha256": "9f92df9c5a87938bd0aa3334be4d61e3fbf8c67345ab1983b5e1fac3d6e7b27f",
+    "model_id": "gpt-4o-mini",
+    "model_version": "fp_b9ca58c2f4",
+    "temperature": 0.0
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "id": "foreign_worker_01_vn_wage",
+  "name": "응우옌 반 호아",
+  "seed_id": "foreign_worker_01_vn_wage",
+  "demographics": {
+    "age_band": "30대 초반",
+    "gender": "남성",
+    "nationality": "베트남",
+    "occupation": "자동차 부품 조립원",
+    "residence": "경기도 안산시",
+    "korean_proficiency": "초급-중급",
+    "digital_literacy": "스마트폰 능숙, PC는 가끔 사용"
+  },
+  "context": {
+    "when": "저녁 퇴근 후, 집에서",
+    "where": "안산의 자취방",
+    "device": "스마트폰, 안드로이드",
+    "emotional_state": "불안, 두려움"
+  },
+  "task": {
+    "goal": "체불된 야근수당을 신고하고 받을 방법을 알고 싶다.",
+    "success_criteria": [
+      "야근수당 신고 절차가 단계별로 안내되었다.",
+      "보복 방지 방법이 최소 1개 안내되었다.",
+      "신고 후 예상되는 결과에 대한 설명이 제공되었다."
+    ]
+  },
+  "background_story": "응우옌 반 호아는 베트남에서 한국으로 일하러 온 외국인 노동자로, 현재 안산의 1차 협력업체에서 자동차 부품 조립 일을 하고 있다. 1년 8개월째 근무 중인데, 최근 3개월 동안 야근수당이 제대로 지급되지 않는 것을 알게 되었다. 동료 베트남 친구와 비교해 보니, 수당 계산 방식이 다르고 회사가 의도적으로 누락한 것 같다는 의심이 든다. 이전에 회사 인사팀에 문의했지만 '계산이 맞다'는 답변만 받았고, 그 이후로는 불안한 마음에 어떻게 해야 할지 고민하고 있다. 보복이 두려워 신고를 주저하고 있다.",
+  "communication_style": {
+    "tone": "공손하지만 불안해하는",
+    "info_disclosure": "수동적: 묻지 않으면 자세히 말 안 함, 한 번에 한 정보씩만 노출",
+    "complaint_expression": "불만을 표현할 때는 조심스럽게 말하며, 주로 질문 형식으로 표현",
+    "typical_phrasing": [
+      "야근수당에 대해 알고 싶어요.",
+      "회사에 문의했는데 답변이 없었어요.",
+      "보복이 걱정돼서 신고하기가 두려워요.",
+      "어떻게 해야 할지 모르겠어요.",
+      "친구와 비교해 보니 이상해요."
+    ],
+    "quirks": [
+      "한국어 조사 가끔 틀림",
+      "되묻기 자주"
+    ]
+  },
+  "generated_with": {
+    "prompt_id": "persona_generator",
+    "prompt_version": "v1",
+    "prompt_sha256": "9f92df9c5a87938bd0aa3334be4d61e3fbf8c67345ab1983b5e1fac3d6e7b27f",
+    "model_id": "gpt-4o-mini",
+    "model_version": "fp_b9ca58c2f4",
+    "temperature": 0.0
+  }
+}

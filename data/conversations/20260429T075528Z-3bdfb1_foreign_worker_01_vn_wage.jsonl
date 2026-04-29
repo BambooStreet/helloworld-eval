@@ -1,0 +1,10 @@
+{"turn_idx":0,"role":"user","content":"안녕하세요. 저는 응우옌 반 호아입니다. 야근수당에 대해 알고 싶어요. 어떻게 해야 할까요?","timestamp":"2026-04-29T07:55:31.392813Z","latency_ms":2734.093948000009,"tokens":{"prompt":961,"completion":28,"total":989}}
+{"turn_idx":0,"role":"bot","content":"안녕하세요. 무엇을 도와드릴까요?","timestamp":"2026-04-29T07:55:31.392958Z","latency_ms":50.0,"tokens":null}
+{"turn_idx":1,"role":"user","content":"안녕하세요. 야근수당이 제대로 지급되지 않아서 걱정이에요. 신고하려고 하는데, 어떻게 해야 할지 모르겠어요. 알려주실 수 있나요?","timestamp":"2026-04-29T07:55:33.168092Z","latency_ms":1775.0435089983512,"tokens":{"prompt":1008,"completion":40,"total":1048}}
+{"turn_idx":1,"role":"bot","content":"조금 더 구체적으로 말씀해 주실 수 있을까요?","timestamp":"2026-04-29T07:55:33.168227Z","latency_ms":50.0,"tokens":null}
+{"turn_idx":2,"role":"user","content":"네, 알겠습니다. 제가 3개월 동안 야근수당이 제대로 안 나왔어요. 친구와 비교해 보니 이상해요. 회사에 문의했는데 '계산이 맞다'고만 했어요. 신고하려고 하는데, 절차가 궁금해요. 어떻게 해야 하나요?","timestamp":"2026-04-29T07:55:34.624473Z","latency_ms":1456.1861709989898,"tokens":{"prompt":1070,"completion":67,"total":1137}}
+{"turn_idx":2,"role":"bot","content":"관련 절차는 다음과 같습니다. 1) 신청서 작성 2) 서류 제출 3) 심사","timestamp":"2026-04-29T07:55:34.624555Z","latency_ms":50.0,"tokens":null}
+{"turn_idx":3,"role":"user","content":"신청서 작성은 어떻게 해야 하나요? 어떤 서류가 필요할까요? 그리고 심사 기간은 얼마나 걸릴까요?","timestamp":"2026-04-29T07:55:35.462223Z","latency_ms":837.6084459996491,"tokens":{"prompt":1170,"completion":28,"total":1198}}
+{"turn_idx":3,"role":"bot","content":"추가로 궁금하신 부분이 있으시면 말씀해 주세요.","timestamp":"2026-04-29T07:55:35.462338Z","latency_ms":50.0,"tokens":null}
+{"turn_idx":4,"role":"user","content":"신고 후에 회사에서 보복할까 봐 걱정이에요. 보복을 방지할 방법이 있을까요?","timestamp":"2026-04-29T07:55:36.401989Z","latency_ms":939.5838079999521,"tokens":{"prompt":1221,"completion":29,"total":1250}}
+{"turn_idx":4,"role":"bot","content":"도움이 되었기를 바랍니다. 다른 질문이 있으시면 알려주세요.","timestamp":"2026-04-29T07:55:36.402077Z","latency_ms":50.0,"tokens":null}

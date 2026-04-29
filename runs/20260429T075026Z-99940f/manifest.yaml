@@ -1,0 +1,109 @@
+run_id: 20260429T075026Z-99940f
+created_at: '2026-04-29T07:50:26.182835Z'
+finalized_at: '2026-04-29T07:50:33.498052Z'
+git_commit: 1c3d6ca9274e172eb9d4eebb5a516969d395b092
+requirements_lock_hash: d0a6f581717bbfffe43bcd51c0758a59428ba6348ccca5f0ca76d6da341551c0
+python_version: 3.13.7
+platform: Linux-5.15.153.1-microsoft-standard-WSL2-x86_64-with-glibc2.39
+config:
+  command: simulate
+  persona_path: data/personas/foreign_worker_01_vn_wage.json
+  adapter_config: null
+  max_turns: 5
+  mock: true
+  session_id_override: null
+llm_calls:
+- timestamp: '2026-04-29T07:50:27.863836Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v1
+  prompt_sha256: 24763d1f0b796259c699469b3baf6157fc171a01d681581e2b123b37efdd4474
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 961
+    completion_tokens: 28
+    total_tokens: 989
+  usd_cost: 0.00016094999999999998
+  latency_ms: 1648.4462010012066
+  attempts: 1
+- timestamp: '2026-04-29T07:50:29.118516Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v1
+  prompt_sha256: 24763d1f0b796259c699469b3baf6157fc171a01d681581e2b123b37efdd4474
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 1008
+    completion_tokens: 40
+    total_tokens: 1048
+  usd_cost: 0.00017519999999999998
+  latency_ms: 1254.4681760009553
+  attempts: 1
+- timestamp: '2026-04-29T07:50:30.990014Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v1
+  prompt_sha256: 24763d1f0b796259c699469b3baf6157fc171a01d681581e2b123b37efdd4474
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 1070
+    completion_tokens: 69
+    total_tokens: 1139
+  usd_cost: 0.0002019
+  latency_ms: 1871.345969999311
+  attempts: 1
+- timestamp: '2026-04-29T07:50:32.558968Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v1
+  prompt_sha256: 24763d1f0b796259c699469b3baf6157fc171a01d681581e2b123b37efdd4474
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 1172
+    completion_tokens: 18
+    total_tokens: 1190
+  usd_cost: 0.00018659999999999998
+  latency_ms: 1568.7777099992672
+  attempts: 1
+- timestamp: '2026-04-29T07:50:33.496644Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v1
+  prompt_sha256: 24763d1f0b796259c699469b3baf6157fc171a01d681581e2b123b37efdd4474
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 1213
+    completion_tokens: 25
+    total_tokens: 1238
+  usd_cost: 0.00019695
+  latency_ms: 937.5618560006842
+  attempts: 1
+totals:
+  llm_calls: 5
+  tokens: 5604
+  usd_cost: 0.000922

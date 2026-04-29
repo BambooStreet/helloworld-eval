@@ -1,0 +1,70 @@
+run_id: 20260429T074155Z-de521e
+created_at: '2026-04-29T07:41:55.671927Z'
+finalized_at: '2026-04-29T07:42:09.455280Z'
+git_commit: 76abb76554738e5271981013df75417cd295d7e1
+requirements_lock_hash: d0a6f581717bbfffe43bcd51c0758a59428ba6348ccca5f0ca76d6da341551c0
+python_version: 3.13.7
+platform: Linux-5.15.153.1-microsoft-standard-WSL2-x86_64-with-glibc2.39
+config:
+  command: persona-generate
+  seed_dir: /home/ohmyhong1/projects/evaluation/evaluation/personas/seeds
+  output_dir: /home/ohmyhong1/projects/evaluation/data/personas
+llm_calls:
+- timestamp: '2026-04-29T07:42:08.765581Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_b9ca58c2f4
+  prompt_id: persona_generator
+  prompt_version: v1
+  prompt_sha256: 9f92df9c5a87938bd0aa3334be4d61e3fbf8c67345ab1983b5e1fac3d6e7b27f
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: json_object
+  usage:
+    prompt_tokens: 1221
+    completion_tokens: 639
+    total_tokens: 1860
+  usd_cost: 0.00056655
+  latency_ms: 13049.858243999552
+  attempts: 1
+- timestamp: '2026-04-29T07:42:08.796647Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_b9ca58c2f4
+  prompt_id: persona_generator
+  prompt_version: v1
+  prompt_sha256: 9f92df9c5a87938bd0aa3334be4d61e3fbf8c67345ab1983b5e1fac3d6e7b27f
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: json_object
+  usage:
+    prompt_tokens: 1254
+    completion_tokens: 610
+    total_tokens: 1864
+  usd_cost: 0.0005541
+  latency_ms: 12901.654324999981
+  attempts: 1
+- timestamp: '2026-04-29T07:42:09.452494Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_b9ca58c2f4
+  prompt_id: persona_generator
+  prompt_version: v1
+  prompt_sha256: 9f92df9c5a87938bd0aa3334be4d61e3fbf8c67345ab1983b5e1fac3d6e7b27f
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: json_object
+  usage:
+    prompt_tokens: 1232
+    completion_tokens: 630
+    total_tokens: 1862
+  usd_cost: 0.0005628
+  latency_ms: 13553.733283000838
+  attempts: 1
+totals:
+  llm_calls: 3
+  tokens: 5586
+  usd_cost: 0.001683

@@ -1,0 +1,235 @@
+run_id: 20260429T080344Z-37fb65
+created_at: '2026-04-29T08:03:44.674687Z'
+finalized_at: '2026-04-29T08:06:48.105129Z'
+git_commit: 4ce40cc37daf4555472354112af51941b001ae3a
+requirements_lock_hash: d0a6f581717bbfffe43bcd51c0758a59428ba6348ccca5f0ca76d6da341551c0
+python_version: 3.13.7
+platform: Linux-5.15.153.1-microsoft-standard-WSL2-x86_64-with-glibc2.39
+config:
+  command: simulate
+  persona_path: data/personas/foreign_worker_01_vn_wage.json
+  adapter_config: configs/chatbot_adapter.yaml
+  max_turns: 15
+  mock: false
+  session_id_override: null
+llm_calls:
+- timestamp: '2026-04-29T08:03:46.601464Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 1252
+    completion_tokens: 19
+    total_tokens: 1271
+  usd_cost: 0.0001992
+  latency_ms: 1871.4742479987763
+  attempts: 1
+- timestamp: '2026-04-29T08:03:58.382317Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 1475
+    completion_tokens: 53
+    total_tokens: 1528
+  usd_cost: 0.00025305
+  latency_ms: 1442.5770010002452
+  attempts: 1
+- timestamp: '2026-04-29T08:04:19.271689Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 1914
+    completion_tokens: 57
+    total_tokens: 1971
+  usd_cost: 0.0003213
+  latency_ms: 1670.3720229997998
+  attempts: 1
+- timestamp: '2026-04-29T08:04:34.827413Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 2322
+    completion_tokens: 41
+    total_tokens: 2363
+  usd_cost: 0.0003729
+  latency_ms: 1880.5198919999384
+  attempts: 1
+- timestamp: '2026-04-29T08:04:51.121575Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 2699
+    completion_tokens: 68
+    total_tokens: 2767
+  usd_cost: 0.00044565
+  latency_ms: 2502.6963590007654
+  attempts: 1
+- timestamp: '2026-04-29T08:05:07.534358Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 3129
+    completion_tokens: 55
+    total_tokens: 3184
+  usd_cost: 0.00050235
+  latency_ms: 1367.563973999495
+  attempts: 1
+- timestamp: '2026-04-29T08:05:20.585533Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 3539
+    completion_tokens: 64
+    total_tokens: 3603
+  usd_cost: 0.00056925
+  latency_ms: 1567.3967630009429
+  attempts: 1
+- timestamp: '2026-04-29T08:05:36.569703Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 3905
+    completion_tokens: 52
+    total_tokens: 3957
+  usd_cost: 0.00061695
+  latency_ms: 2095.81933499976
+  attempts: 1
+- timestamp: '2026-04-29T08:05:59.647965Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 4354
+    completion_tokens: 54
+    total_tokens: 4408
+  usd_cost: 0.0006855
+  latency_ms: 1882.4555159990268
+  attempts: 1
+- timestamp: '2026-04-29T08:06:13.852859Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 4819
+    completion_tokens: 59
+    total_tokens: 4878
+  usd_cost: 0.0007582499999999999
+  latency_ms: 1575.3115730003628
+  attempts: 1
+- timestamp: '2026-04-29T08:06:27.115898Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 5071
+    completion_tokens: 52
+    total_tokens: 5123
+  usd_cost: 0.00079185
+  latency_ms: 2088.2416190015647
+  attempts: 1
+- timestamp: '2026-04-29T08:06:39.852622Z'
+  role: persona
+  model_id: gpt-4o-mini
+  model_version: fp_4ba42b5ccb
+  prompt_id: persona_user
+  prompt_version: v2
+  prompt_sha256: 80df808cd23fd67113161713de7886b40d16fa9dcbaa8af3bb916fb8ee5c3c6e
+  temperature: 0.0
+  top_p: null
+  seed: null
+  response_format: null
+  usage:
+    prompt_tokens: 5407
+    completion_tokens: 45
+    total_tokens: 5452
+  usd_cost: 0.00083805
+  latency_ms: 1454.1256449992943
+  attempts: 1
+totals:
+  llm_calls: 12
+  tokens: 40505
+  usd_cost: 0.006354
