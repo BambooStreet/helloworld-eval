@@ -1,0 +1,8 @@
+endpoint: https://helloworld-func-app-v2-e2gad2h8gwdbatha.koreacentral-01.azurewebsites.net/api/question
+method: POST
+headers:
+  Content-Type: application/json
+request_body:
+  query: "${user_message}"
+  sessionId: "${session_id}"
+answer_path: answer
