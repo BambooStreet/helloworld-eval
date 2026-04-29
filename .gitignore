@@ -1,6 +1,9 @@
 ## user defined
 .venv/
-logs/
+chat.db
+chat.db-journal
+chat.db-wal
+chat.db-shm
 
 # Azure 세팅
 Azure/__pycache__/

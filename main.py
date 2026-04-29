@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import sqlite3
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -28,8 +29,8 @@ app = FastAPI()
 _chat_service = None
 _service_lock = threading.Lock()
 
-LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
-LOG_FILE = os.path.join(LOG_DIR, "chat_test.jsonl")
+DB_PATH = os.path.join(os.path.dirname(__file__), "chat.db")
+HISTORY_LIMIT = 10
 
 
 def _build_base_payload(request: Request, status_code: int, error: str, request_id: str):
@@ -153,7 +154,9 @@ class ChatService:
         self.rag_db = self.rag_client[self.db_name]
         self.collection = self.rag_db[self.collection_name]
 
-        logging.info("RAG database initialized successfully")
+        init_chat_db()
+
+        logging.info("RAG database and chat log DB initialized successfully")
 
     def get_query_model_response_with_docs(
         self,
@@ -178,14 +181,56 @@ class ChatService:
         }
 
 
-def append_local_log(entry: dict) -> None:
-    """로컬 JSONL 파일에 한 줄 append."""
+def init_chat_db() -> None:
+    """SQLite 메시지 테이블 초기화 (idempotent)."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS messages (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  TEXT NOT NULL,
+                sender      TEXT NOT NULL CHECK(sender IN ('user','bot')),
+                content     TEXT NOT NULL,
+                ts          TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_session_id "
+            "ON messages(session_id, id)"
+        )
+
+
+def load_history(session_id: str, limit: int = HISTORY_LIMIT) -> list[dict]:
+    """세션의 최근 N개 메시지를 시간 순서대로 반환."""
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            "SELECT sender, content FROM messages "
+            "WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+            (session_id, limit),
+        ).fetchall()
+    rows.reverse()
+    return [
+        {"speaker": "human" if sender == "user" else "ai", "utterance": content}
+        for sender, content in rows
+    ]
+
+
+def save_turn(session_id: str, user_msg: str, bot_msg: str) -> None:
+    """user 메시지와 bot 응답을 한 트랜잭션으로 저장."""
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     try:
-        os.makedirs(LOG_DIR, exist_ok=True)
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except Exception as log_err:
-        logging.error("Failed to write local log: %s", log_err)
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.executemany(
+                "INSERT INTO messages (session_id, sender, content, ts) "
+                "VALUES (?, ?, ?, ?)",
+                [
+                    (session_id, "user", user_msg, now),
+                    (session_id, "bot", bot_msg, now),
+                ],
+            )
+    except Exception as exc:
+        logging.error("Failed to save turn for session %s: %s", session_id, exc)
 
 
 @app.post("/api/question")
@@ -215,7 +260,17 @@ async def question(request: Request):
             details={"field": "query", "issue": "Missing or empty query"},
         )
 
-    logging.info("[question] Incoming query=%s", query)
+    session_id = req_body.get("sessionId", "")
+    if not session_id or not str(session_id).strip():
+        return create_response(
+            request,
+            status_code=400,
+            error="sessionId 필드가 필요합니다.",
+            details={"field": "sessionId", "issue": "Missing or empty sessionId"},
+        )
+    session_id = str(session_id).strip()
+
+    logging.info("[question] sessionId=%s query=%s", session_id, query)
 
     try:
         chat_service = await get_chat_service()
@@ -266,8 +321,25 @@ async def question(request: Request):
     )
 
     try:
+        conversation_history = load_history(session_id)
+    except Exception as exc:
+        logging.error("Failed to load history: %s", exc, exc_info=True)
+        return create_response(
+            request,
+            status_code=500,
+            error="대화 기록 조회 중 오류가 발생했습니다.",
+            details={"errorType": type(exc).__name__, "errorMessage": str(exc)},
+        )
+
+    logging.info(
+        "[question] loaded %d prior turns for session %s",
+        len(conversation_history),
+        session_id,
+    )
+
+    try:
         result = chat_service.get_query_model_response_with_docs(
-            conversation_history=[],
+            conversation_history=conversation_history,
             query_text=translated_query,
             mongo_query=mongo_query,
             query_lang=query_lang,
@@ -284,22 +356,13 @@ async def question(request: Request):
     answer = result["answer"]
     retrieved_doc_ids = result["retrieved_doc_ids"]
 
-    append_local_log(
-        {
-            "timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
-            "query": query,
-            "translatedQuery": translated_query,
-            "queryLang": query_lang,
-            "mongoQuery": mongo_query,
-            "retrievedDocIds": retrieved_doc_ids,
-            "answer": answer,
-        }
-    )
+    save_turn(session_id, query, answer)
 
     return create_response(
         request,
         status_code=200,
         data={
+            "sessionId": session_id,
             "answer": answer,
             "translatedQuery": translated_query,
             "queryLang": query_lang,

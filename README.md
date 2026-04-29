@@ -1,6 +1,6 @@
 # helloworld-eval (chatmodel)
 
-외국인 비자/취업 법률 정보 챗봇 백엔드의 **로컬 평가 전용 슬림 버전**입니다. 인증·대화 히스토리·로그 DB 없이 단발성 질문 → 응답만 처리합니다.
+외국인 비자/취업 법률 정보 챗봇 백엔드의 **로컬 평가 전용 슬림 버전**입니다. 인증 없이 클라이언트가 부여한 `sessionId` 단위로 멀티턴 대화 기록을 SQLite에 저장하며 번역+하이브리드 RAG로 답변을 생성합니다.
 
 ## 실행법
 
@@ -44,11 +44,16 @@ cp .env.example .env
 curl "http://127.0.0.1:8000/api/get_echo_call?param=hi"
 ```
 
-**질문 응답**
+**질문 응답** (`sessionId`는 클라이언트가 임의로 부여; 동일 ID로 연속 호출하면 멀티턴이 됨)
 ```bash
 curl -X POST http://127.0.0.1:8000/api/question \
   -H "Content-Type: application/json" \
-  -d '{"query":"E-9 비자 갱신 방법"}'
+  -d '{"sessionId":"test-001","query":"E-9 비자 갱신 방법"}'
+
+# 같은 세션의 다음 질문 (직전 대화 맥락이 자동으로 반영됨)
+curl -X POST http://127.0.0.1:8000/api/question \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"test-001","query":"필요한 서류 알려줘"}'
 ```
 
 선택적으로 `mongo_query`(MongoDB aggregation 파이프라인)를 직접 넘겨 번역 단계의 자동 생성 결과를 덮어쓸 수 있습니다.
@@ -63,6 +68,7 @@ curl -X POST http://127.0.0.1:8000/api/question \
   "error": "OK",
   "requestId": "...",
   "data": {
+    "sessionId": "test-001",
     "answer": "...",
     "translatedQuery": "...",
     "queryLang": "ko",
@@ -75,22 +81,38 @@ curl -X POST http://127.0.0.1:8000/api/question \
 
 `POST /api/question` 한 번 호출 시 일어나는 일.
 
-1. **요청 검증** (`main.py:question`) — JSON 본문에서 `query` 필드 추출 (빈 문자열은 400)
-2. **질문 번역** — `TranslateModel.translate_query()` 한 번에 다음 3가지 동시 반환
+1. **요청 검증** (`main.py:question`) — `query`, `sessionId` 둘 다 비어있지 않은지 확인 (400)
+2. **대화 기록 로드** — SQLite `messages` 테이블에서 해당 `sessionId`의 최근 10개 메시지를 시간 순으로 조회. 처음 보는 `sessionId`면 빈 리스트로 시작 (자동 신규 세션)
+3. **질문 번역** — `TranslateModel.translate_query()` 한 번에 다음 3가지 동시 반환
    - `translated_query` — 한국어로 번역된 질문
    - `query_lang` — 원문 언어 (응답 언어 결정에 사용)
    - `mongo_query` — MongoDB aggregation 파이프라인 (구조화 텍스트 검색용)
-3. **하이브리드 검색** (`query_model.py:hybrid_search`)
+4. **하이브리드 검색** (`query_model.py:hybrid_search`)
    - **1단계** — `mongo_query`가 있으면 `collection.aggregate()`로 키워드/텍스트 매칭
    - **2단계** — 1단계 결과가 `top_k=20`에 모자라면 OpenAI 임베딩(`text-embedding-3-large`) → `$vectorSearch`(`vector_index`)로 ANN 검색해 보충
    - 중복 제거 후 상위 `top_k`개 반환
-4. **LLM 응답 생성** — 검색 문서들을 컨텍스트로 합쳐 `chat` 프롬프트 템플릿에 주입, `gpt-4o-mini`로 답변 생성. 답변 언어는 원문 언어(`query_lang`)에 맞춤
-5. **로컬 로그 적재** — 매 요청마다 `logs/chat_test.jsonl`에 한 줄 append
-   ```json
-   {"timestamp":"...","query":"...","translatedQuery":"...","queryLang":"ko","mongoQuery":[...],"retrievedDocIds":["..."],"answer":"..."}
-   ```
+5. **LLM 응답 생성** — 검색 문서 + 직전 대화 기록을 함께 `chat` 프롬프트 템플릿에 주입, `gpt-4o-mini`로 답변 생성. 답변 언어는 원문 언어(`query_lang`)에 맞춤
+6. **대화 저장** — `messages` 테이블에 user 메시지 + bot 응답을 한 트랜잭션으로 insert
 
-대화 히스토리는 항상 빈 리스트로 호출되므로 모든 질문은 단발성으로 처리됩니다.
+## 채팅 로그 저장 (`chat.db`)
+
+SQLite 단일 테이블 스키마:
+
+```sql
+CREATE TABLE messages (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id  TEXT NOT NULL,
+  sender      TEXT NOT NULL CHECK(sender IN ('user','bot')),
+  content     TEXT NOT NULL,
+  ts          TEXT NOT NULL          -- ISO8601 UTC
+);
+CREATE INDEX idx_messages_session_id ON messages(session_id, id);
+```
+
+- 서버 첫 실행 시 자동 생성 (idempotent)
+- 별도의 `sessions` 테이블 없음 — `session_id`는 그냥 클라이언트가 정한 임의 문자열
+- 검사: `sqlite3 chat.db "SELECT session_id, sender, substr(content,1,40), ts FROM messages ORDER BY id DESC LIMIT 20"`
+- 초기화: 서버 정지 후 `rm chat.db`
 
 ## 주요 설정 (`configs/config.json`)
 
@@ -115,5 +137,5 @@ prompts/prompts.py    # 프롬프트 템플릿
 utils.py              # parse_mongo_query
 pyproject.toml        # uv 프로젝트 메타 + 의존성 선언
 uv.lock               # uv 락파일 (정확한 버전 고정)
-logs/                 # (gitignored) 요청별 JSONL 로그
+chat.db               # (gitignored) 멀티턴 대화 로그 SQLite
 ```
