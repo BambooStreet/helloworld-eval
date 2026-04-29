@@ -14,6 +14,7 @@ from pymongo import MongoClient
 
 from utils import parse_mongo_query
 from translate_model import TranslateModel
+from query_rewriter import QueryRewriter
 
 load_dotenv()
 
@@ -112,6 +113,7 @@ class ChatService:
         self.collection = None
         self.rag_client = None
         self.translate_model = None
+        self.query_rewriter = None
         self.config = None
         self.rag_db = None
 
@@ -131,6 +133,7 @@ class ChatService:
 
         self.model = ChatModel(self.config)
         self.translate_model = TranslateModel(self.config)
+        self.query_rewriter = QueryRewriter(self.config)
 
         rag_mongodb_uri = os.getenv("RAG_DATA_MONGODB_URI")
         openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -284,7 +287,28 @@ async def question(request: Request):
         )
 
     try:
-        translation = chat_service.translate_model.translate_query(query)
+        conversation_history = load_history(session_id)
+    except Exception as exc:
+        logging.error("Failed to load history: %s", exc, exc_info=True)
+        return create_response(
+            request,
+            status_code=500,
+            error="대화 기록 조회 중 오류가 발생했습니다.",
+            details={"errorType": type(exc).__name__, "errorMessage": str(exc)},
+        )
+
+    logging.info(
+        "[question] loaded %d prior turns for session %s",
+        len(conversation_history),
+        session_id,
+    )
+
+    rewritten_query = chat_service.query_rewriter.rewrite(conversation_history, query)
+    if rewritten_query != query:
+        logging.info("[question] rewrote query: %r -> %r", query, rewritten_query)
+
+    try:
+        translation = chat_service.translate_model.translate_query(rewritten_query)
     except Exception as exc:
         logging.error("Translation failed: %s", exc, exc_info=True)
         return create_response(
@@ -321,23 +345,6 @@ async def question(request: Request):
     )
 
     try:
-        conversation_history = load_history(session_id)
-    except Exception as exc:
-        logging.error("Failed to load history: %s", exc, exc_info=True)
-        return create_response(
-            request,
-            status_code=500,
-            error="대화 기록 조회 중 오류가 발생했습니다.",
-            details={"errorType": type(exc).__name__, "errorMessage": str(exc)},
-        )
-
-    logging.info(
-        "[question] loaded %d prior turns for session %s",
-        len(conversation_history),
-        session_id,
-    )
-
-    try:
         result = chat_service.get_query_model_response_with_docs(
             conversation_history=conversation_history,
             query_text=translated_query,
@@ -364,6 +371,7 @@ async def question(request: Request):
         data={
             "sessionId": session_id,
             "answer": answer,
+            "rewrittenQuery": rewritten_query,
             "translatedQuery": translated_query,
             "queryLang": query_lang,
             "retrievedDocIds": retrieved_doc_ids,

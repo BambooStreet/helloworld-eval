@@ -70,6 +70,7 @@ curl -X POST http://127.0.0.1:8000/api/question \
   "data": {
     "sessionId": "test-001",
     "answer": "...",
+    "rewrittenQuery": "...",
     "translatedQuery": "...",
     "queryLang": "ko",
     "retrievedDocIds": ["..."]
@@ -83,16 +84,19 @@ curl -X POST http://127.0.0.1:8000/api/question \
 
 1. **요청 검증** (`main.py:question`) — `query`, `sessionId` 둘 다 비어있지 않은지 확인 (400)
 2. **대화 기록 로드** — SQLite `messages` 테이블에서 해당 `sessionId`의 최근 10개 메시지를 시간 순으로 조회. 처음 보는 `sessionId`면 빈 리스트로 시작 (자동 신규 세션)
-3. **질문 번역** — `TranslateModel.translate_query()` 한 번에 다음 3가지 동시 반환
-   - `translated_query` — 한국어로 번역된 질문
+3. **질문 재작성** (`query_rewriter.py:QueryRewriter`) — history가 있으면 `gpt-4o-mini` (temperature=0)로 새 질문을 독립 질문으로 재작성. 대명사("그것","그럼")·생략된 주어/목적어를 직전 대화에서 추론해 풀어 씀. 재작성은 원본 언어 유지. history가 비어 있으면 스킵
+4. **질문 번역** — `TranslateModel.translate_query(rewritten_query)`로 다음 3가지 동시 반환
+   - `translated_query` — 한국어로 번역된 (재작성된) 질문
    - `query_lang` — 원문 언어 (응답 언어 결정에 사용)
    - `mongo_query` — MongoDB aggregation 파이프라인 (구조화 텍스트 검색용)
-4. **하이브리드 검색** (`query_model.py:hybrid_search`)
+5. **하이브리드 검색** (`query_model.py:hybrid_search`)
    - **1단계** — `mongo_query`가 있으면 `collection.aggregate()`로 키워드/텍스트 매칭
    - **2단계** — 1단계 결과가 `top_k=20`에 모자라면 OpenAI 임베딩(`text-embedding-3-large`) → `$vectorSearch`(`vector_index`)로 ANN 검색해 보충
    - 중복 제거 후 상위 `top_k`개 반환
-5. **LLM 응답 생성** — 검색 문서 + 직전 대화 기록을 함께 `chat` 프롬프트 템플릿에 주입, `gpt-4o-mini`로 답변 생성. 답변 언어는 원문 언어(`query_lang`)에 맞춤
-6. **대화 저장** — `messages` 테이블에 user 메시지 + bot 응답을 한 트랜잭션으로 insert
+6. **LLM 응답 생성** — 검색 문서 + 직전 대화 기록을 함께 `chat` 프롬프트 템플릿에 주입, `gpt-4o-mini`로 답변 생성. 답변 언어는 원문 언어(`query_lang`)에 맞춤
+7. **대화 저장** — `messages` 테이블에 **원본** user 메시지 + bot 응답을 한 트랜잭션으로 insert (재작성된 query는 저장하지 않음)
+
+> **왜 재작성을 검색 단계에 추가했나?** `conversation_history`는 LLM 응답 생성(6단계)에만 들어가고 RAG 검색(5단계)에는 영향을 주지 않음. 즉 "그럼 필요한 서류는?" 같은 후속 질문은 맥락 없이 그대로 임베딩되어 엉뚱한 문서가 검색될 수 있음. 재작성을 통해 검색용 질의를 "E-9 비자 갱신에 필요한 서류는?"처럼 풀어서 검색 품질을 높임.
 
 ## 채팅 로그 저장 (`chat.db`)
 
@@ -133,6 +137,7 @@ configs/config.json   # 모델/검색 파라미터, RAG 컬렉션 경로
 main.py               # FastAPI 앱 + ChatService
 query_model.py        # 하이브리드 검색 + 응답 생성
 translate_model.py    # 질문 번역 + mongo_query 파이프라인 생성
+query_rewriter.py     # 대화 맥락 기반 질문 재작성 (검색용)
 prompts/prompts.py    # 프롬프트 템플릿
 utils.py              # parse_mongo_query
 pyproject.toml        # uv 프로젝트 메타 + 의존성 선언
