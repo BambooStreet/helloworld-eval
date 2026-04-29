@@ -28,6 +28,7 @@ from .personas.generator import (  # noqa: E402
     generate_all_async,
 )
 from .personas.schema import Persona  # noqa: E402
+from .runner import E2EConfig, run_e2e  # noqa: E402
 from .simulator.adapter import (  # noqa: E402
     ChatbotAdapter,
     HttpChatbotAdapter,
@@ -349,6 +350,62 @@ def evaluate(
     typer.echo(f"Cost: ${recorder.manifest.total_cost_usd:.6f}")
     typer.echo(f"Duration: {duration_s:.1f}s")
     typer.echo(f"Dimensions evaluated: {len(DIMENSIONS)}")
+
+
+@app.command()
+def run(
+    config_path: Path = typer.Option(
+        Path("configs/v1.yaml"), "--config", help="E2E config YAML"
+    ),
+    skip_personas: bool = typer.Option(False, "--skip-personas"),
+    skip_simulation: bool = typer.Option(False, "--skip-simulation"),
+    skip_evaluation: bool = typer.Option(False, "--skip-evaluation"),
+) -> None:
+    """Full E2E pipeline: persona generation -> N simulations per persona -> evaluation.
+
+    Each stage produces its own run manifest under runs/. Use --skip-* to reuse
+    artifacts from a previous partial run.
+    """
+    config = E2EConfig.from_yaml(config_path)
+    settings = Settings()
+
+    typer.echo(f"=== E2E pipeline ({config_path}) ===")
+    typer.echo(
+        f"  personas: skip={skip_personas}, sim: skip={skip_simulation}, "
+        f"eval: skip={skip_evaluation}"
+    )
+    typer.echo(
+        f"  config: n_runs/persona={config.n_runs_per_persona}, "
+        f"max_turns={config.max_turns}, sim_concurrency={config.sim_concurrency}, "
+        f"n_judge_reps={config.n_judge_repetitions}"
+    )
+    typer.echo("")
+
+    stages = asyncio.run(
+        run_e2e(
+            settings=settings,
+            config=config,
+            skip_personas=skip_personas,
+            skip_simulation=skip_simulation,
+            skip_evaluation=skip_evaluation,
+        )
+    )
+
+    total_cost = 0.0
+    for name, stage in stages.items():
+        typer.echo(f"--- {name} ---")
+        typer.echo(f"  duration: {stage.duration_s:.1f}s")
+        typer.echo(f"  cost:     ${stage.cost_usd:.6f}")
+        if stage.notes:
+            typer.echo(f"  notes:    {stage.notes}")
+        if stage.artifacts:
+            preview = stage.artifacts[:3]
+            more = f" (+{len(stage.artifacts) - 3} more)" if len(stage.artifacts) > 3 else ""
+            typer.echo(f"  artifacts: {preview}{more}")
+        total_cost += stage.cost_usd
+
+    typer.echo("")
+    typer.echo(f"=== Total LLM cost: ${total_cost:.6f} ===")
 
 
 def main() -> None:

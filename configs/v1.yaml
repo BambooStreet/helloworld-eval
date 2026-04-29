@@ -1,0 +1,18 @@
+# E2E pipeline config for v1 (foreign worker legal/counseling chatbot).
+# Used by `python -m evaluation.cli run --config configs/v1.yaml`.
+
+seed_dir: evaluation/personas/seeds
+personas_dir: data/personas
+conversations_dir: data/conversations
+reports_dir: data/reports
+
+adapter_config: configs/chatbot_adapter.yaml
+
+n_runs_per_persona: 5
+max_turns: 15
+sim_concurrency: 3
+
+n_judge_repetitions: 3
+
+adversarial_good: data/adversarial/good
+adversarial_bad: data/adversarial/bad
