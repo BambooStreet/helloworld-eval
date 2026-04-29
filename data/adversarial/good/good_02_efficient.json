@@ -1,0 +1,61 @@
+{
+  "persona_id": "foreign_worker_01_vn_wage",
+  "seed_id": "foreign_worker_01_vn_wage",
+  "session_id": "adv-good-02",
+  "run_id": "adv-good-02",
+  "status": "completed",
+  "failure_reason": null,
+  "total_user_turns": 3,
+  "total_bot_turns": 3,
+  "log_path": "synthetic",
+  "turns": [
+    {
+      "turn_idx": 0,
+      "role": "user",
+      "content": "야근수당 누락 신고하고 싶은데 어디서 시작하면 되나요?",
+      "timestamp": "2026-04-29T08:10:00Z",
+      "latency_ms": 1300.0,
+      "tokens": {"prompt": 800, "completion": 22, "total": 822}
+    },
+    {
+      "turn_idx": 0,
+      "role": "bot",
+      "content": "사업장 관할 지방고용노동관서에 임금체불 진정을 제기하시면 됩니다. 고용노동부 민원마당(minwon.moel.go.kr)에서 온라인 진정도 가능합니다. 진정서에는 사업장명, 근무기간, 누락된 야근수당 금액·일자를 기재하면 됩니다.",
+      "timestamp": "2026-04-29T08:10:09Z",
+      "latency_ms": 8000.0,
+      "tokens": null
+    },
+    {
+      "turn_idx": 1,
+      "role": "user",
+      "content": "보복이 걱정되는데 보호 받을 수 있나요?",
+      "timestamp": "2026-04-29T08:10:12Z",
+      "latency_ms": 1200.0,
+      "tokens": {"prompt": 1300, "completion": 18, "total": 1318}
+    },
+    {
+      "turn_idx": 1,
+      "role": "bot",
+      "content": "근로기준법 제104조에 따라 신고를 이유로 한 해고·불이익 처우는 금지되며 위반 시 형사처벌이 가능합니다. 외국인노동자지원센터(1577-0177)에 동행 상담을 요청하시면 통역·동행 지원을 받을 수 있어 권장드립니다.",
+      "timestamp": "2026-04-29T08:10:20Z",
+      "latency_ms": 7500.0,
+      "tokens": null
+    },
+    {
+      "turn_idx": 2,
+      "role": "user",
+      "content": "서류는 뭘 준비해야 하나요?",
+      "timestamp": "2026-04-29T08:10:23Z",
+      "latency_ms": 1100.0,
+      "tokens": {"prompt": 1900, "completion": 12, "total": 1912}
+    },
+    {
+      "turn_idx": 2,
+      "role": "bot",
+      "content": "근로계약서, 급여명세서·이체통장, 근무시간 기록(출퇴근 기록·본인 메모·동료 진술), 외국인등록증 사본 정도면 충분합니다. 외국어 진정서가 필요하면 1577-0177에서 번역 도움을 받으실 수 있습니다. 1차 처리는 25일 이내가 원칙입니다.",
+      "timestamp": "2026-04-29T08:10:31Z",
+      "latency_ms": 7800.0,
+      "tokens": null
+    }
+  ]
+}
